@@ -45,7 +45,7 @@ func main() {
 		log.Fatal(err.Error())
 	}
 	metastore := store.New()
-	metadataRepo = metadata.New(config.Prefix, config.SelfMapping, storeClient, metastore)
+	metadataRepo = metadata.New(config.OnlySelf, config.SelfMapping, storeClient, metastore)
 
 	metadataRepo.StartSync()
 
@@ -151,41 +151,17 @@ func contentType(req *http.Request) int {
 func metadataHandler(w http.ResponseWriter, req *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 
-	clientIP := requestIp(req)
+	clientIP := requestIP(req)
 	requestPath := strings.TrimRight(req.URL.EscapedPath()[1:], "/")
 	log.Debug("clientIP: %s, requestPath: %s", clientIP, requestPath)
 
-	if config.OnlySelf {
-		if requestPath == "/" {
-			selfVal, ok := metadataRepo.GetSelf(clientIP, "/")
-			if ok {
-				val := make(map[string]interface{})
-				val["self"] = selfVal
-				respondSuccess(w, req, val)
-			} else {
-				respondSuccess(w, req, make(map[string]interface{}))
-			}
-		} else {
-			respondError(w, req, "Not found", http.StatusNotFound)
-		}
+	val, ok := metadataRepo.Get(clientIP, requestPath)
+	if !ok {
+		log.Warning("%s not found %s", requestPath, clientIP)
+		respondError(w, req, "Not found", http.StatusNotFound)
 	} else {
-		val, ok := metadataRepo.Get(requestPath)
-		if !ok {
-			log.Warning("key not found requestPath%s, clientIP:%s", requestPath, clientIP)
-			respondError(w, req, "Not found", http.StatusNotFound)
-		} else {
-			if requestPath == "/" {
-				selfVal, ok := metadataRepo.GetSelf(clientIP, "/")
-				if ok {
-					mapVal, ok := val.(map[string]interface{})
-					if ok {
-						mapVal["self"] = selfVal
-					}
-				}
-			}
-			respondSuccess(w, req, val)
-		}
-
+		log.Info("%s %s OK", requestPath, clientIP)
+		respondSuccess(w, req, val)
 	}
 
 }
@@ -193,9 +169,9 @@ func metadataHandler(w http.ResponseWriter, req *http.Request) {
 func selfHandler(w http.ResponseWriter, req *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 
-	clientIP := requestIp(req)
+	clientIP := requestIP(req)
 
-	requestPath := strings.TrimRight(req.URL.EscapedPath()[1:], "/")
+	requestPath := strings.TrimRight(req.URL.EscapedPath()[1:], "/self")
 
 	val, ok := metadataRepo.GetSelf(clientIP, requestPath)
 	if !ok {
@@ -308,7 +284,7 @@ func respondYAML(w http.ResponseWriter, req *http.Request, val interface{}) {
 	}
 }
 
-func requestIp(req *http.Request) string {
+func requestIP(req *http.Request) string {
 	if config.EnableXff {
 		clientIp := req.Header.Get("X-Forwarded-For")
 		if len(clientIp) > 0 {
