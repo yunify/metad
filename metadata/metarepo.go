@@ -9,22 +9,26 @@ import (
 )
 
 type MetadataRepo struct {
-	prefix      string
+	onlySelf    bool
 	selfMapping map[string]map[string]string
 	storeClient backends.StoreClient
 	Metastore   store.Store
 	stopChan    chan bool
 }
 
-func New(prefix string, selfMapping map[string]map[string]string, storeClient backends.StoreClient, metastore store.Store) *MetadataRepo {
+func New(onlySelf bool, selfMapping map[string]map[string]string, storeClient backends.StoreClient, metastore store.Store) *MetadataRepo {
 	metadataRepo := MetadataRepo{
-		prefix:      prefix,
+		onlySelf:    onlySelf,
 		selfMapping: selfMapping,
 		storeClient: storeClient,
 		Metastore:   metastore,
 		stopChan:    make(chan bool),
 	}
 	return &metadataRepo
+}
+
+func (r *MetadataRepo) SetOnlySelf(onlySelf bool) {
+	r.onlySelf = onlySelf
 }
 
 func (r *MetadataRepo) StartSync() {
@@ -37,9 +41,36 @@ func (r *MetadataRepo) ReSync() {
 	r.storeClient.Sync(r.Metastore, r.stopChan)
 }
 
-func (r *MetadataRepo) Get(metapath string) (interface{}, bool) {
+func (r *MetadataRepo) Get(clientIP string, metapath string) (interface{}, bool) {
 	metapath = path.Clean(path.Join("/", metapath))
-	return r.Metastore.Get(metapath)
+	if r.onlySelf {
+		if metapath == "/" {
+			val := make(map[string]interface{})
+			selfVal, ok := r.GetSelf(clientIP, "/")
+			if ok {
+				val["self"] = selfVal
+			}
+			return val, true
+		} else {
+			return nil, false
+		}
+	} else {
+		val, ok := r.Metastore.Get(metapath)
+		if !ok {
+			return nil, false
+		} else {
+			if metapath == "/" {
+				selfVal, ok := r.GetSelf(clientIP, "/")
+				if ok {
+					mapVal, ok := val.(map[string]interface{})
+					if ok {
+						mapVal["self"] = selfVal
+					}
+				}
+			}
+			return val, true
+		}
+	}
 }
 
 func (r *MetadataRepo) GetSelf(clientIP string, metapath string) (interface{}, bool) {
@@ -51,12 +82,12 @@ func (r *MetadataRepo) GetSelf(clientIP string, metapath string) (interface{}, b
 	if metapath == "/" {
 		meta := make(map[string]interface{})
 		for k, v := range metakeys {
-			nodePath := path.Clean(path.Join("/", v))
-			val, getOK := r.Metastore.Get(nodePath)
+			subpath := path.Clean(path.Join("/", v))
+			val, getOK := r.Metastore.Get(subpath)
 			if getOK {
 				meta[k] = val
 			} else {
-				log.Warnf("Can not get values from backend by path: %s", nodePath)
+				log.Warnf("Can not get values from backend by path: %s", subpath)
 			}
 		}
 		return meta, true

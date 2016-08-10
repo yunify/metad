@@ -11,6 +11,10 @@ import (
 	"time"
 )
 
+func init() {
+	log.SetLevel("debug")
+}
+
 func TestMetarepo(t *testing.T) {
 
 	backendNodes := []string{"etcd"}
@@ -34,14 +38,14 @@ func TestMetarepo(t *testing.T) {
 		metastore := store.New()
 
 		selfMapping := make(map[string]map[string]string)
-		metarepo := New(prefix, selfMapping, storeClient, metastore)
+		metarepo := New(false, selfMapping, storeClient, metastore)
 		metarepo.StartSync()
 
 		testData := FillTestData(storeClient)
 		time.Sleep(1000 * time.Millisecond)
 		ValidTestData(t, testData, metastore)
 
-		val, ok := metarepo.Get("/0")
+		val, ok := metarepo.Get("192.168.0.1", "/0")
 		assert.True(t, ok)
 		assert.NotNil(t, val)
 
@@ -58,8 +62,137 @@ func TestMetarepo(t *testing.T) {
 		metarepo.ReSync()
 		time.Sleep(1000 * time.Millisecond)
 
-		_, ok = metarepo.Get("/0/0")
+		_, ok = metarepo.Get("192.168.0.1", "/0/0")
 		assert.False(t, ok)
+
+		storeClient.Delete("/")
+	}
+}
+
+func TestMetarepoSelf(t *testing.T) {
+
+	backendNodes := []string{"etcd"}
+	prefix := fmt.Sprintf("/prefix%v", rand.Intn(1000))
+
+	for _, backend := range backendNodes {
+
+		nodes := backends.GetDefaultBackends(backend)
+
+		config := backends.Config{
+			Backend:      backend,
+			BackendNodes: nodes,
+			Prefix:       prefix,
+		}
+		storeClient, err := backends.New(config)
+		assert.Nil(t, err)
+
+		storeClient.Delete("/")
+		//assert.Nil(t, err)
+
+		metastore := store.New()
+
+		selfMapping := make(map[string]map[string]string)
+		metarepo := New(false, selfMapping, storeClient, metastore)
+		metarepo.StartSync()
+
+		testData := FillTestData(storeClient)
+		time.Sleep(1000 * time.Millisecond)
+		ValidTestData(t, testData, metastore)
+
+		val, ok := metarepo.Get("192.168.0.1", "/0")
+		assert.True(t, ok)
+		assert.NotNil(t, val)
+
+		mapVal, mok := val.(map[string]interface{})
+		assert.True(t, mok)
+
+		_, mok = mapVal["0"]
+		assert.True(t, mok)
+
+		for i := 0; i < 10; i++ {
+			ip := fmt.Sprintf("192.168.1.%v", i)
+			mapping := make(map[string]string)
+			key := fmt.Sprintf("s%v", i)
+			mapping[key] = fmt.Sprintf("/%v", i)
+			metarepo.Register(ip, mapping)
+		}
+
+		p := rand.Intn(10)
+		ip := fmt.Sprintf("192.168.1.%v", p)
+
+		val, ok = metarepo.GetSelf(ip, "/")
+		mapVal, mok = val.(map[string]interface{})
+
+		key := fmt.Sprintf("s%v", p)
+		assert.True(t, mok)
+		assert.NotNil(t, mapVal[key])
+
+		val, ok = metarepo.GetSelf(ip, fmt.Sprintf("/s%v/%v", p, p))
+		assert.True(t, ok)
+		assert.Equal(t, fmt.Sprintf("%v-%v", p, p), val)
+
+		storeClient.Delete("/0/0")
+
+		//TODO etcd current not support watch children delete. so try resync
+
+		metarepo.ReSync()
+		time.Sleep(1000 * time.Millisecond)
+
+		val, ok = metarepo.GetSelf("192.168.1.0", "/s0/0")
+		assert.False(t, ok)
+		assert.Nil(t, val)
+
+		storeClient.Delete("/")
+	}
+}
+
+func TestMetarepoRoot(t *testing.T) {
+
+	backendNodes := []string{"etcd"}
+	prefix := fmt.Sprintf("/prefix%v", rand.Intn(1000))
+
+	for _, backend := range backendNodes {
+
+		nodes := backends.GetDefaultBackends(backend)
+
+		config := backends.Config{
+			Backend:      backend,
+			BackendNodes: nodes,
+			Prefix:       prefix,
+		}
+		storeClient, err := backends.New(config)
+		assert.Nil(t, err)
+
+		storeClient.Delete("/")
+
+		FillTestData(storeClient)
+
+		metastore := store.New()
+
+		selfMapping := make(map[string]map[string]string)
+		metarepo := New(false, selfMapping, storeClient, metastore)
+		metarepo.StartSync()
+		time.Sleep(1000 * time.Millisecond)
+
+		ip := "192.168.1.0"
+		mapping := make(map[string]string)
+		metarepo.Register(ip, mapping)
+
+		val, ok := metarepo.Get(ip, "/")
+		assert.True(t, ok)
+		mapVal, mok := val.(map[string]interface{})
+		assert.True(t, mok)
+		selfVal := mapVal["self"]
+		assert.NotNil(t, selfVal)
+		assert.True(t, len(mapVal) > 1)
+
+		metarepo.SetOnlySelf(true)
+
+		val, ok = metarepo.Get(ip, "/")
+		mapVal = val.(map[string]interface{})
+		selfVal = mapVal["self"]
+		assert.NotNil(t, selfVal)
+		assert.True(t, len(mapVal) == 1)
 
 		storeClient.Delete("/")
 	}
