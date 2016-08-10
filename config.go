@@ -35,7 +35,6 @@ var (
 	printVersion bool
 	logLevel     string
 	enableXff    bool
-	enableCache  bool
 	onlySelf     bool
 	prefix       string
 	listen       string
@@ -54,23 +53,22 @@ var (
 )
 
 type Config struct {
-	Backend      string   `yaml:"backend"`
-	LogLevel     string   `yaml:"log-level"`
-	PIDFile      string   `yaml:"pid-file"`
-	EnableXff    bool     `yaml:"xff"`
-	EnableCache  bool     `yaml:"cache"`
-	Prefix       string   `yaml:"prefix"`
-	OnlySelf     bool     `yaml:"only-self"`
-	Listen       string   `yaml:"listen"`
-	ListenManage string   `yaml:"listen-manage"`
-	BasicAuth    bool     `yaml:"basic-auth"`
-	ClientCaKeys string   `yaml:"client-ca-keys"`
-	ClientCert   string   `yaml:"client-cert"`
-	ClientKey    string   `yaml:"client-key"`
-	BackendNodes []string `yaml:"nodes"`
-	Username     string   `yaml:"username"`
-	Password     string   `yaml:"password"`
-	SelfMapping  map[string]map[string]string
+	Backend      string                       `yaml:"backend"`
+	LogLevel     string                       `yaml:"log-level"`
+	PIDFile      string                       `yaml:"pid-file"`
+	EnableXff    bool                         `yaml:"xff"`
+	Prefix       string                       `yaml:"prefix"`
+	OnlySelf     bool                         `yaml:"only-self"`
+	Listen       string                       `yaml:"listen"`
+	ListenManage string                       `yaml:"listen-manage"`
+	BasicAuth    bool                         `yaml:"basic-auth"`
+	ClientCaKeys string                       `yaml:"client-ca-keys"`
+	ClientCert   string                       `yaml:"client-cert"`
+	ClientKey    string                       `yaml:"client-key"`
+	BackendNodes []string                     `yaml:"nodes"`
+	Username     string                       `yaml:"username"`
+	Password     string                       `yaml:"password"`
+	SelfMapping  map[string]map[string]string `yaml:"self-mapping"`
 }
 
 func init() {
@@ -81,7 +79,6 @@ func init() {
 	flag.StringVar(&logLevel, "log-level", "info", "set log level: debug|info|warning")
 	flag.StringVar(&pidFile, "pid-file", "", "PID to write to")
 	flag.BoolVar(&enableXff, "xff", false, "X-Forwarded-For header support")
-	flag.BoolVar(&enableCache, "cache", false, "enable kv cache")
 	flag.StringVar(&prefix, "prefix", "", "default backend key prefix")
 	flag.BoolVar(&onlySelf, "only-self", false, "only support self metadata query.")
 	flag.StringVar(&listen, "listen", ":80", "Address to listen to (TCP)")
@@ -166,8 +163,6 @@ func setConfigFromFlag(f *flag.Flag) {
 		config.PIDFile = pidFile
 	case "xff":
 		config.EnableXff = enableXff
-	case "cache":
-		config.EnableCache = enableCache
 	case "prefix":
 		config.Prefix = prefix
 	case "only-self":

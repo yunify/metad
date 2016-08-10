@@ -14,10 +14,10 @@ import (
 	"strings"
 	"syscall"
 
-	log "github.com/Sirupsen/logrus"
 	"github.com/golang/gddo/httputil"
 	"github.com/gorilla/mux"
 	"github.com/yunify/metadata-proxy/backends"
+	"github.com/yunify/metadata-proxy/log"
 	"github.com/yunify/metadata-proxy/metadata"
 	"github.com/yunify/metadata-proxy/store"
 	yaml "gopkg.in/yaml.v2"
@@ -38,7 +38,7 @@ var (
 func main() {
 	parseFlags()
 
-	log.Infof("Starting metadata-proxy %s", VERSION)
+	log.Info("Starting metadata-proxy %s", VERSION)
 	var err error
 	storeClient, err = backends.New(backendsConfig)
 	if err != nil {
@@ -62,8 +62,8 @@ func main() {
 		Methods("GET", "HEAD").
 		Name("Metadata")
 
-	log.Info("Listening on ", config.Listen)
-	log.Fatal(http.ListenAndServe(config.Listen, router))
+	log.Info("Listening on %s", config.Listen)
+	log.Fatal("%v", http.ListenAndServe(config.Listen, router))
 }
 
 func parseFlags() {
@@ -111,12 +111,12 @@ func watchHttp() {
 	reloadRouter.HandleFunc("/favicon.ico", http.NotFound)
 	reloadRouter.HandleFunc("/v1/reload", httpReload).Methods("POST")
 
-	log.Info("Listening for Reload on ", config.ListenManage)
+	log.Info("Listening for Reload on %s", config.ListenManage)
 	go http.ListenAndServe(config.ListenManage, reloadRouter)
 }
 
 func httpReload(w http.ResponseWriter, req *http.Request) {
-	log.Debugf("Received HTTP reload request")
+	log.Debug("Received HTTP reload request")
 	respChan := make(chan error)
 	reloadChan <- respChan
 	err := <-respChan
@@ -151,12 +151,13 @@ func contentType(req *http.Request) int {
 func metadataHandler(w http.ResponseWriter, req *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 
-	clientIp := requestIp(req)
+	clientIP := requestIp(req)
 	requestPath := strings.TrimRight(req.URL.EscapedPath()[1:], "/")
+	log.Debug("clientIP: %s, requestPath: %s", clientIP, requestPath)
 
 	if config.OnlySelf {
 		if requestPath == "/" {
-			selfVal, ok := metadataRepo.GetSelf(clientIp, "/")
+			selfVal, ok := metadataRepo.GetSelf(clientIP, "/")
 			if ok {
 				val := make(map[string]interface{})
 				val["self"] = selfVal
@@ -170,11 +171,11 @@ func metadataHandler(w http.ResponseWriter, req *http.Request) {
 	} else {
 		val, ok := metadataRepo.Get(requestPath)
 		if !ok {
-			log.WithFields(log.Fields{"client": clientIp}).Warningf("self not found %s", clientIp)
+			log.Warning("key not found requestPath%s, clientIP:%s", requestPath, clientIP)
 			respondError(w, req, "Not found", http.StatusNotFound)
 		} else {
 			if requestPath == "/" {
-				selfVal, ok := metadataRepo.GetSelf(clientIp, "/")
+				selfVal, ok := metadataRepo.GetSelf(clientIP, "/")
 				if ok {
 					mapVal, ok := val.(map[string]interface{})
 					if ok {
@@ -192,16 +193,16 @@ func metadataHandler(w http.ResponseWriter, req *http.Request) {
 func selfHandler(w http.ResponseWriter, req *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 
-	clientIp := requestIp(req)
+	clientIP := requestIp(req)
 
 	requestPath := strings.TrimRight(req.URL.EscapedPath()[1:], "/")
 
-	val, ok := metadataRepo.GetSelf(clientIp, requestPath)
+	val, ok := metadataRepo.GetSelf(clientIP, requestPath)
 	if !ok {
-		log.WithFields(log.Fields{"client": clientIp}).Warningf("self not found %s", clientIp)
+		log.Warning("self not found %s", clientIP)
 		respondError(w, req, "Not found", http.StatusNotFound)
 	} else {
-		log.WithFields(log.Fields{"client": clientIp}).Infof("/self/%s OK", requestPath)
+		log.Info("/self/%s %s OK", requestPath, clientIP)
 		respondSuccess(w, req, val)
 	}
 }
@@ -233,7 +234,7 @@ func respondError(w http.ResponseWriter, req *http.Request, msg string, statusCo
 }
 
 func respondSuccess(w http.ResponseWriter, req *http.Request, val interface{}) {
-	log.Infof("reponse success %v", val)
+	log.Info("reponse success %v", val)
 	switch contentType(req) {
 	case ContentText:
 		respondText(w, req, val)
