@@ -214,36 +214,6 @@ func FillTestData(storeClient backends.StoreClient) map[string]string {
 	return testData
 }
 
-func RandomUpdate(testData map[string]string, storeClient backends.StoreClient, times int) {
-	length := len(testData)
-	keys := make([]string, 0, length)
-	for k := range testData {
-		keys = append(keys, k)
-	}
-	for i := 0; i < times; i++ {
-		idx := rand.Intn(length)
-		key := keys[idx]
-		val := testData[key]
-		newVal := fmt.Sprintf("%s-%v", val, 0)
-
-		storeClient.SetValues(map[string]string{key: newVal})
-		testData[key] = newVal
-	}
-}
-
-func RandomDelete(testData map[string]string, storeClient backends.StoreClient) string {
-	length := len(testData)
-	keys := make([]string, 0, length)
-	for k := range testData {
-		keys = append(keys, k)
-	}
-	idx := rand.Intn(length)
-	key := keys[idx]
-	storeClient.Delete(key)
-	delete(testData, key)
-	return key
-}
-
 func ValidTestData(t *testing.T, testData map[string]string, metastore store.Store) {
 	for k, v := range testData {
 		storeVal, _ := metastore.Get(k)
