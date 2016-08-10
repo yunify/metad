@@ -13,6 +13,8 @@ import (
 type StoreClient interface {
 	GetValues(key string) (map[string]string, error)
 	Sync(key string, store store.Store, stopChan chan bool)
+	SetValues(values map[string]string) error
+	Delete(key string) error
 }
 
 // New is used to create a storage client based on our configuration.

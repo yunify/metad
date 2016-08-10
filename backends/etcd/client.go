@@ -166,3 +166,18 @@ func (c *Client) internalSync(key string, store store.Store, stopChan chan bool)
 func (c *Client) Sync(key string, store store.Store, stopChan chan bool) {
 	go c.internalSync(key, store, stopChan)
 }
+
+func (c *Client) SetValues(values map[string]string) error {
+	for k, v := range values {
+		_, err := c.client.Set(context.Background(), k, v, nil)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (c *Client) Delete(key string) error {
+	_, err := c.client.Delete(context.Background(), key, &client.DeleteOptions{Recursive: true})
+	return err
+}
