@@ -15,6 +15,9 @@ func TestStore(t *testing.T) {
 	prefix := fmt.Sprintf("/prefix%v", rand.Int())
 
 	stopChan := make(chan bool)
+	defer func() {
+		stopChan <- true
+	}()
 	for _, backend := range backends {
 
 		nodes := GetDefaultBackends(backend)
