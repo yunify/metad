@@ -149,17 +149,18 @@ func (c *Client) internalSync(key string, store store.Store, stopChan chan bool)
 			time.Sleep(time.Duration(1000) * time.Millisecond)
 			continue
 		}
-
-		vars := make(map[string]string)
-
-		err = nodeWalk(resp.Node, vars)
-		if err != nil {
-			log.Errorf("Watch etcd walk error: %s", err.Error())
-			time.Sleep(time.Duration(1000) * time.Millisecond)
-			continue
-		}
-		store.SetBulk(vars)
+		processSyncChange(store, resp)
 		waitIndex = resp.Node.ModifiedIndex
+	}
+}
+
+func processSyncChange(store store.Store, resp *client.Response) {
+	//TODO wait etcd 3.1.0 support watch children dir action.
+	switch resp.Action {
+	case "delete":
+		store.Delete(resp.Node.Key)
+	default:
+		store.Set(resp.Node.Key, false, resp.Node.Value)
 	}
 }
 
