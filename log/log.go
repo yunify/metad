@@ -16,10 +16,10 @@ import (
 	log "github.com/Sirupsen/logrus"
 )
 
-type ConfdFormatter struct {
+type LogFormatter struct {
 }
 
-func (c *ConfdFormatter) Format(entry *log.Entry) ([]byte, error) {
+func (c *LogFormatter) Format(entry *log.Entry) ([]byte, error) {
 	timestamp := time.Now().Format(time.RFC3339)
 	hostname, _ := os.Hostname()
 	return []byte(fmt.Sprintf("%s %s %s[%d]: %s %s\n", timestamp, hostname, tag, os.Getpid(), strings.ToUpper(entry.Level.String()), entry.Message)), nil
@@ -31,7 +31,7 @@ var tag string
 
 func init() {
 	tag = os.Args[0]
-	log.SetFormatter(&ConfdFormatter{})
+	log.SetFormatter(&LogFormatter{})
 }
 
 // SetTag sets the tag.
