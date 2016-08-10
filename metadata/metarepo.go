@@ -28,15 +28,13 @@ func New(prefix string, selfMapping map[string]map[string]string, storeClient ba
 }
 
 func (r *MetadataRepo) StartSync() {
-	key := path.Clean(path.Join("/", r.prefix))
-	r.storeClient.Sync(key, r.Metastore, r.stopChan)
+	r.storeClient.Sync(r.Metastore, r.stopChan)
 }
 
 func (r *MetadataRepo) ReSync() {
 	r.stopChan <- true
-	key := path.Clean(path.Join("/", r.prefix))
 	r.Metastore.Delete("/")
-	r.storeClient.Sync(key, r.Metastore, r.stopChan)
+	r.storeClient.Sync(r.Metastore, r.stopChan)
 }
 
 func (r *MetadataRepo) Get(metapath string) (interface{}, bool) {
@@ -79,4 +77,12 @@ func (r *MetadataRepo) GetSelf(clientIP string, metapath string) (interface{}, b
 func (r *MetadataRepo) SelfMapping(clientIP string) (map[string]string, bool) {
 	val, ok := r.selfMapping[clientIP]
 	return val, ok
+}
+
+func (r *MetadataRepo) Register(clientIP string, mapping map[string]string) {
+	r.selfMapping[clientIP] = mapping
+}
+
+func (r *MetadataRepo) Unregister(clientIP string) {
+	delete(r.selfMapping, clientIP)
 }
