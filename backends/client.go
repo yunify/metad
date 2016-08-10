@@ -12,7 +12,7 @@ import (
 // key/value pairs from a backend store.
 type StoreClient interface {
 	GetValues(key string) (map[string]string, error)
-	Sync(key string, store store.Store, stopChan chan bool)
+	Sync(store store.Store, stopChan chan bool)
 	SetValues(values map[string]string) error
 	Delete(key string) error
 }
@@ -31,7 +31,7 @@ func New(config Config) (StoreClient, error) {
 		}
 		// Create the etcd client upfront and use it for the life of the process.
 		// The etcdClient is an http.Client and designed to be reused.
-		return etcd.NewEtcdClient(backendNodes, config.ClientCert, config.ClientKey, config.ClientCaKeys, config.BasicAuth, config.Username, config.Password)
+		return etcd.NewEtcdClient(config.Prefix, backendNodes, config.ClientCert, config.ClientKey, config.ClientCaKeys, config.BasicAuth, config.Username, config.Password)
 	}
 	return nil, errors.New("Invalid backend")
 }

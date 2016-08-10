@@ -11,16 +11,18 @@ import (
 	log "github.com/Sirupsen/logrus"
 	"github.com/coreos/etcd/client"
 	"github.com/yunify/metadata-proxy/store"
+	"github.com/yunify/metadata-proxy/util"
 	"golang.org/x/net/context"
 )
 
 // Client is a wrapper around the etcd client
 type Client struct {
 	client client.KeysAPI
+	prefix string
 }
 
 // NewEtcdClient returns an *etcd.Client with a connection to named machines.
-func NewEtcdClient(machines []string, cert, key, caCert string, basicAuth bool, username string, password string) (*Client, error) {
+func NewEtcdClient(prefix string, machines []string, cert, key, caCert string, basicAuth bool, username string, password string) (*Client, error) {
 	var c client.Client
 	var kapi client.KeysAPI
 	var err error
@@ -50,7 +52,7 @@ func NewEtcdClient(machines []string, cert, key, caCert string, basicAuth bool, 
 	if caCert != "" {
 		certBytes, err := ioutil.ReadFile(caCert)
 		if err != nil {
-			return &Client{kapi}, err
+			return &Client{kapi, prefix}, err
 		}
 
 		caCertPool := x509.NewCertPool()
@@ -64,7 +66,7 @@ func NewEtcdClient(machines []string, cert, key, caCert string, basicAuth bool, 
 	if cert != "" && key != "" {
 		tlsCert, err := tls.LoadX509KeyPair(cert, key)
 		if err != nil {
-			return &Client{kapi}, err
+			return &Client{kapi, prefix}, err
 		}
 		tlsConfig.Certificates = []tls.Certificate{tlsCert}
 	}
@@ -74,25 +76,25 @@ func NewEtcdClient(machines []string, cert, key, caCert string, basicAuth bool, 
 
 	c, err = client.New(cfg)
 	if err != nil {
-		return &Client{kapi}, err
+		return &Client{kapi, prefix}, err
 	}
 
 	kapi = client.NewKeysAPI(c)
-	return &Client{kapi}, nil
+	return &Client{kapi, prefix}, nil
 }
 
 // GetValues queries etcd for key Recursive:true.
 func (c *Client) GetValues(key string) (map[string]string, error) {
 	vars := make(map[string]string)
-	resp, err := c.client.Get(context.Background(), key, &client.GetOptions{
+	resp, err := c.client.Get(context.Background(), util.AppendPathPrefix(key, c.prefix), &client.GetOptions{
 		Recursive: true,
 		Sort:      true,
 		Quorum:    true,
 	})
 	if err != nil {
-		return vars, err
+		return nil, err
 	}
-	err = nodeWalk(resp.Node, vars)
+	err = c.nodeWalk(resp.Node, vars)
 	if err != nil {
 		return vars, err
 	}
@@ -100,25 +102,26 @@ func (c *Client) GetValues(key string) (map[string]string, error) {
 }
 
 // nodeWalk recursively descends nodes, updating vars.
-func nodeWalk(node *client.Node, vars map[string]string) error {
+func (c *Client) nodeWalk(node *client.Node, vars map[string]string) error {
 	if node != nil {
 		key := node.Key
 		if !node.Dir {
+			key = util.TrimPathPrefix(key, c.prefix)
 			vars[key] = node.Value
 		} else {
 			for _, node := range node.Nodes {
-				nodeWalk(node, vars)
+				c.nodeWalk(node, vars)
 			}
 		}
 	}
 	return nil
 }
 
-func (c *Client) internalSync(key string, store store.Store, stopChan chan bool) {
+func (c *Client) internalSync(store store.Store, stopChan chan bool) {
 	var waitIndex uint64 = 0
 	inited := false
 	for {
-		watcher := c.client.Watcher(key, &client.WatcherOptions{AfterIndex: waitIndex, Recursive: true})
+		watcher := c.client.Watcher(c.prefix, &client.WatcherOptions{AfterIndex: waitIndex, Recursive: true})
 		ctx, cancel := context.WithCancel(context.Background())
 		cancelRoutine := make(chan bool)
 		defer close(cancelRoutine)
@@ -133,9 +136,9 @@ func (c *Client) internalSync(key string, store store.Store, stopChan chan bool)
 		}()
 
 		if !inited {
-			val, err := c.GetValues(key)
+			val, err := c.GetValues("/")
 			if err != nil {
-				log.Errorf("GetValue from etcd key:%s error: %s", key, err.Error())
+				log.Errorf("GetValue from etcd key:%s error: %s", c.prefix, err.Error())
 				time.Sleep(time.Duration(1000) * time.Millisecond)
 				continue
 			}
@@ -149,27 +152,30 @@ func (c *Client) internalSync(key string, store store.Store, stopChan chan bool)
 			time.Sleep(time.Duration(1000) * time.Millisecond)
 			continue
 		}
-		processSyncChange(store, resp)
+		c.processSyncChange(store, resp)
 		waitIndex = resp.Node.ModifiedIndex
 	}
 }
 
-func processSyncChange(store store.Store, resp *client.Response) {
+func (c *Client) processSyncChange(store store.Store, resp *client.Response) {
+	log.Debug("process sync change: resp: %v ", resp)
+	key := util.TrimPathPrefix(resp.Node.Key, c.prefix)
 	//TODO wait etcd 3.1.0 support watch children dir action.
 	switch resp.Action {
 	case "delete":
-		store.Delete(resp.Node.Key)
+		store.Delete(key)
 	default:
-		store.Set(resp.Node.Key, false, resp.Node.Value)
+		store.Set(key, false, resp.Node.Value)
 	}
 }
 
-func (c *Client) Sync(key string, store store.Store, stopChan chan bool) {
-	go c.internalSync(key, store, stopChan)
+func (c *Client) Sync(store store.Store, stopChan chan bool) {
+	go c.internalSync(store, stopChan)
 }
 
 func (c *Client) SetValues(values map[string]string) error {
 	for k, v := range values {
+		k = util.AppendPathPrefix(k, c.prefix)
 		_, err := c.client.Set(context.Background(), k, v, nil)
 		if err != nil {
 			return err
@@ -179,6 +185,7 @@ func (c *Client) SetValues(values map[string]string) error {
 }
 
 func (c *Client) Delete(key string) error {
+	key = util.AppendPathPrefix(key, c.prefix)
 	_, err := c.client.Delete(context.Background(), key, &client.DeleteOptions{Recursive: true})
 	return err
 }
