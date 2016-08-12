@@ -25,6 +25,7 @@ func (n *Nodes) Set(node string) error {
 	return nil
 }
 
+
 var (
 	VERSION        string = "1.0"
 	config         Config // holds the global config
@@ -68,7 +69,7 @@ type Config struct {
 	BackendNodes []string                     `yaml:"nodes"`
 	Username     string                       `yaml:"username"`
 	Password     string                       `yaml:"password"`
-	SelfMapping  map[string]map[string]string `yaml:"self-mapping"`
+	SelfMapping  map[string]metadata.Mapping `yaml:"self-mapping"`
 }
 
 func init() {
@@ -101,7 +102,7 @@ func initConfig() error {
 		LogLevel:     "info",
 		Listen:       ":80",
 		ListenManage: "127.0.0.1:8112",
-		SelfMapping:  make(map[string]map[string]string),
+		SelfMapping:  make(map[string]metadata.Mapping),
 	}
 	if configFile != "" {
 		data, err := ioutil.ReadFile(configFile)

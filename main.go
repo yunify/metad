@@ -32,7 +32,7 @@ const (
 var (
 	router = mux.NewRouter()
 
-	reloadChan = make(chan chan error)
+	resyncChan = make(chan chan error)
 )
 
 func main() {
@@ -50,7 +50,7 @@ func main() {
 	metadataRepo.StartSync()
 
 	watchSignals()
-	watchHttp()
+	watchManage()
 
 	router.HandleFunc("/favicon.ico", http.NotFound)
 
@@ -87,13 +87,13 @@ func watchSignals() {
 	go func() {
 		for _ = range c {
 			log.Info("Received HUP signal")
-			reloadChan <- nil
+			resyncChan <- nil
 		}
 	}()
 
 	go func() {
-		for resp := range reloadChan {
-			err := reload()
+		for resp := range resyncChan {
+			err := resync()
 			if resp != nil {
 				resp <- err
 			}
@@ -101,24 +101,26 @@ func watchSignals() {
 	}()
 }
 
-func reload() error {
-	//TODO
+func resync() error {
+	metadataRepo.ReSync()
 	return nil
 }
 
-func watchHttp() {
-	reloadRouter := mux.NewRouter()
-	reloadRouter.HandleFunc("/favicon.ico", http.NotFound)
-	reloadRouter.HandleFunc("/v1/reload", httpReload).Methods("POST")
+func watchManage() {
+	manageRouter := mux.NewRouter()
+	manageRouter.HandleFunc("/favicon.ico", http.NotFound)
+	manageRouter.HandleFunc("/v1/resync", httpResync).Methods("POST")
+	manageRouter.HandleFunc("/v1/register", httpRegister).Methods("POST")
+	manageRouter.HandleFunc("/v1/unregister", httpUnregister).Methods("POST")
 
-	log.Info("Listening for Reload on %s", config.ListenManage)
-	go http.ListenAndServe(config.ListenManage, reloadRouter)
+	log.Info("Listening for Manage on %s", config.ListenManage)
+	go http.ListenAndServe(config.ListenManage, manageRouter)
 }
 
-func httpReload(w http.ResponseWriter, req *http.Request) {
-	log.Debug("Received HTTP reload request")
+func httpResync(w http.ResponseWriter, req *http.Request) {
+	log.Debug("Received HTTP resync request")
 	respChan := make(chan error)
-	reloadChan <- respChan
+	resyncChan <- respChan
 	err := <-respChan
 
 	if err == nil {
@@ -127,6 +129,28 @@ func httpReload(w http.ResponseWriter, req *http.Request) {
 		w.WriteHeader(500)
 		io.WriteString(w, err.Error())
 	}
+}
+
+func httpRegister(w http.ResponseWriter, req *http.Request) {
+	log.Debug("Received HTTP register request")
+	ip := req.FormValue("ip")
+	mapping := make(metadata.Mapping)
+	mapppingstr := req.FormValue("mapping")
+	err := json.Unmarshal([]byte(mapppingstr), &mapping)
+	metadataRepo.Register(ip, mapping)
+	if err == nil {
+		io.WriteString(w, "OK")
+	} else {
+		w.WriteHeader(500)
+		io.WriteString(w, err.Error())
+	}
+}
+
+func httpUnregister(w http.ResponseWriter, req *http.Request) {
+	log.Debug("Received HTTP register request")
+	ip := req.FormValue("ip")
+	metadataRepo.Unregister(ip)
+	io.WriteString(w, "OK")
 }
 
 func contentType(req *http.Request) int {

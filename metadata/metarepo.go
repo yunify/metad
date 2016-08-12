@@ -1,22 +1,24 @@
 package metadata
 
 import (
-	log "github.com/Sirupsen/logrus"
 	"github.com/yunify/metadata-proxy/backends"
 	"github.com/yunify/metadata-proxy/store"
 	"path"
 	"strings"
+	"github.com/yunify/metadata-proxy/log"
 )
+
+type Mapping map[string]string
 
 type MetadataRepo struct {
 	onlySelf    bool
-	selfMapping map[string]map[string]string
+	selfMapping map[string]Mapping
 	storeClient backends.StoreClient
 	Metastore   store.Store
 	stopChan    chan bool
 }
 
-func New(onlySelf bool, selfMapping map[string]map[string]string, storeClient backends.StoreClient, metastore store.Store) *MetadataRepo {
+func New(onlySelf bool, selfMapping map[string]Mapping, storeClient backends.StoreClient, metastore store.Store) *MetadataRepo {
 	metadataRepo := MetadataRepo{
 		onlySelf:    onlySelf,
 		selfMapping: selfMapping,
@@ -42,6 +44,8 @@ func (r *MetadataRepo) ReSync() {
 }
 
 func (r *MetadataRepo) Get(clientIP string, metapath string) (interface{}, bool) {
+	log.Debug("Get clientIP:%s metapath:%s", clientIP, metapath)
+
 	metapath = path.Clean(path.Join("/", metapath))
 	if r.onlySelf {
 		if metapath == "/" {
@@ -74,6 +78,8 @@ func (r *MetadataRepo) Get(clientIP string, metapath string) (interface{}, bool)
 }
 
 func (r *MetadataRepo) GetSelf(clientIP string, metapath string) (interface{}, bool) {
+	log.Debug("GetSelf clientIP:%s metapath:%s", clientIP, metapath)
+
 	metapath = path.Clean(path.Join("/", metapath))
 	metakeys, ok := r.selfMapping[clientIP]
 	if !ok {
@@ -87,7 +93,7 @@ func (r *MetadataRepo) GetSelf(clientIP string, metapath string) (interface{}, b
 			if getOK {
 				meta[k] = val
 			} else {
-				log.Warnf("Can not get values from backend by path: %s", subpath)
+				log.Warning("Can not get values from backend by path: %s", subpath)
 			}
 		}
 		return meta, true
@@ -100,7 +106,7 @@ func (r *MetadataRepo) GetSelf(clientIP string, metapath string) (interface{}, b
 				return r.Metastore.Get(nodePath)
 			}
 		}
-		log.Warnf("Can not get self metadata by clientIP: %s path: %s", clientIP, metapath)
+		log.Warning("Can not get self metadata by clientIP: %s path: %s", clientIP, metapath)
 		return nil, false
 	}
 }
@@ -110,7 +116,7 @@ func (r *MetadataRepo) SelfMapping(clientIP string) (map[string]string, bool) {
 	return val, ok
 }
 
-func (r *MetadataRepo) Register(clientIP string, mapping map[string]string) {
+func (r *MetadataRepo) Register(clientIP string, mapping Mapping) {
 	r.selfMapping[clientIP] = mapping
 }
 
