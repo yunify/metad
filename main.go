@@ -36,7 +36,18 @@ var (
 )
 
 func main() {
-	parseFlags()
+
+	flag.Parse()
+
+	if printVersion {
+		fmt.Printf("%s\n", VERSION)
+		os.Exit(0)
+	}
+
+	if err := initConfig(); err != nil {
+		log.Fatal(err.Error())
+		os.Exit(-1)
+	}
 
 	log.Info("Starting metadata-proxy %s", VERSION)
 	var err error
@@ -64,20 +75,6 @@ func main() {
 
 	log.Info("Listening on %s", config.Listen)
 	log.Fatal("%v", http.ListenAndServe(config.Listen, router))
-}
-
-func parseFlags() {
-	flag.Parse()
-
-	if printVersion {
-		fmt.Printf("%s\n", VERSION)
-		os.Exit(0)
-	}
-
-	if err := initConfig(); err != nil {
-		log.Fatal(err.Error())
-		os.Exit(-1)
-	}
 }
 
 func watchSignals() {
