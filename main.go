@@ -65,6 +65,10 @@ func main() {
 
 	router.HandleFunc("/favicon.ico", http.NotFound)
 
+	router.HandleFunc("/self", selfHandler).
+		Methods("GET", "HEAD").
+		Name("SelfRoot")
+
 	router.HandleFunc("/self/{key:.*}", selfHandler).
 		Methods("GET", "HEAD").
 		Name("Self")
@@ -170,10 +174,8 @@ func contentType(req *http.Request) int {
 }
 
 func metadataHandler(w http.ResponseWriter, req *http.Request) {
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-
 	clientIP := requestIP(req)
-	requestPath := strings.TrimRight(req.URL.EscapedPath()[1:], "/")
+	requestPath := req.URL.EscapedPath() //strings.TrimRight(req.URL.EscapedPath()[1:], "/")
 	log.Debug("clientIP: %s, requestPath: %s", clientIP, requestPath)
 
 	val, ok := metadataRepo.Get(clientIP, requestPath)
@@ -188,11 +190,8 @@ func metadataHandler(w http.ResponseWriter, req *http.Request) {
 }
 
 func selfHandler(w http.ResponseWriter, req *http.Request) {
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-
 	clientIP := requestIP(req)
-
-	requestPath := strings.TrimRight(req.URL.EscapedPath()[1:], "/self")
+	requestPath := strings.TrimLeft(req.URL.EscapedPath(), "/self")
 
 	val, ok := metadataRepo.GetSelf(clientIP, requestPath)
 	if !ok {

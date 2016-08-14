@@ -2,10 +2,10 @@ package metadata
 
 import (
 	"github.com/yunify/metadata-proxy/backends"
+	"github.com/yunify/metadata-proxy/log"
 	"github.com/yunify/metadata-proxy/store"
 	"path"
 	"strings"
-	"github.com/yunify/metadata-proxy/log"
 )
 
 type Mapping map[string]string
@@ -78,9 +78,8 @@ func (r *MetadataRepo) Get(clientIP string, metapath string) (interface{}, bool)
 }
 
 func (r *MetadataRepo) GetSelf(clientIP string, metapath string) (interface{}, bool) {
-	log.Debug("GetSelf clientIP:%s metapath:%s", clientIP, metapath)
-
 	metapath = path.Clean(path.Join("/", metapath))
+	log.Debug("GetSelf clientIP:%s metapath:%s", clientIP, metapath)
 	metakeys, ok := r.selfMapping[clientIP]
 	if !ok {
 		return nil, false
