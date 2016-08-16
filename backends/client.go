@@ -2,8 +2,8 @@ package backends
 
 import (
 	"errors"
-	log "github.com/Sirupsen/logrus"
 	"github.com/yunify/metadata-proxy/backends/etcd"
+	"github.com/yunify/metadata-proxy/log"
 	"github.com/yunify/metadata-proxy/store"
 	"strings"
 )
@@ -15,6 +15,9 @@ type StoreClient interface {
 	Sync(store store.Store, stopChan chan bool)
 	SetValues(values map[string]string) error
 	Delete(key string) error
+	SyncSelfMapping(mapping store.Store, stopChan chan bool)
+	RegisterSelfMapping(clientIP string, mapping map[string]string) error
+	UnregisterSelfMapping(clientIP string) error
 }
 
 // New is used to create a storage client based on our configuration.

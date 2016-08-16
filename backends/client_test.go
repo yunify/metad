@@ -10,8 +10,8 @@ import (
 	"time"
 )
 
-func TestStore(t *testing.T) {
-
+func TestClientSync(t *testing.T) {
+	log.SetLevel("debug")
 	backendNodes := []string{"etcd"}
 	prefix := fmt.Sprintf("/prefix%v", rand.Intn(1000))
 
@@ -54,6 +54,52 @@ func TestStore(t *testing.T) {
 		assert.Nil(t, val)
 
 		storeClient.Delete("/")
+	}
+}
+
+func TestSelfMapping(t *testing.T) {
+	log.SetLevel("debug")
+
+	backendNodes := []string{"etcd"}
+	prefix := fmt.Sprintf("/prefix%v", rand.Intn(1000))
+
+	stopChan := make(chan bool)
+	defer func() {
+		stopChan <- true
+	}()
+	for _, backend := range backendNodes {
+
+		nodes := GetDefaultBackends(backend)
+
+		config := Config{
+			Backend:      backend,
+			BackendNodes: nodes,
+			Prefix:       prefix,
+		}
+		storeClient, err := New(config)
+		assert.Nil(t, err)
+
+		metastore := store.New()
+		storeClient.SyncSelfMapping(metastore, stopChan)
+
+		for i := 0; i < 10; i++ {
+			ip := fmt.Sprintf("192.168.1.%v", i)
+			mapping := map[string]string{
+				"instance": fmt.Sprintf("/instances/%v", i),
+			}
+			storeClient.RegisterSelfMapping(ip, mapping)
+		}
+		time.Sleep(1000 * time.Millisecond)
+		meta, _ := metastore.Get("/")
+		for i := 0; i < 10; i++ {
+			ip := fmt.Sprintf("192.168.1.%v", i)
+			val, ok := metastore.Get(ip)
+			assert.True(t, ok)
+			mapVal, mok := val.(map[string]interface{})
+			assert.True(t, mok)
+			path := mapVal["instance"]
+			assert.Equal(t, path, fmt.Sprintf("/instances/%v", i))
+		}
 	}
 }
 
