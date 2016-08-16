@@ -53,22 +53,21 @@ var (
 )
 
 type Config struct {
-	Backend      string                      `yaml:"backend"`
-	LogLevel     string                      `yaml:"log_level"`
-	PIDFile      string                      `yaml:"pid_file"`
-	EnableXff    bool                        `yaml:"xff"`
-	Prefix       string                      `yaml:"prefix"`
-	OnlySelf     bool                        `yaml:"only_self"`
-	Listen       string                      `yaml:"listen"`
-	ListenManage string                      `yaml:"listen_manage"`
-	BasicAuth    bool                        `yaml:"basic_auth"`
-	ClientCaKeys string                      `yaml:"client_ca_keys"`
-	ClientCert   string                      `yaml:"client_cert"`
-	ClientKey    string                      `yaml:"client_key"`
-	BackendNodes []string                    `yaml:"nodes"`
-	Username     string                      `yaml:"username"`
-	Password     string                      `yaml:"password"`
-	SelfMapping  map[string]metadata.Mapping `yaml:"self_mapping"`
+	Backend      string   `yaml:"backend"`
+	LogLevel     string   `yaml:"log_level"`
+	PIDFile      string   `yaml:"pid_file"`
+	EnableXff    bool     `yaml:"xff"`
+	Prefix       string   `yaml:"prefix"`
+	OnlySelf     bool     `yaml:"only_self"`
+	Listen       string   `yaml:"listen"`
+	ListenManage string   `yaml:"listen_manage"`
+	BasicAuth    bool     `yaml:"basic_auth"`
+	ClientCaKeys string   `yaml:"client_ca_keys"`
+	ClientCert   string   `yaml:"client_cert"`
+	ClientKey    string   `yaml:"client_key"`
+	BackendNodes []string `yaml:"nodes"`
+	Username     string   `yaml:"username"`
+	Password     string   `yaml:"password"`
 }
 
 func init() {
@@ -100,7 +99,6 @@ func initConfig() error {
 		LogLevel:     "info",
 		Listen:       ":80",
 		ListenManage: "127.0.0.1:8112",
-		SelfMapping:  make(map[string]metadata.Mapping),
 	}
 	if configFile != "" {
 		data, err := ioutil.ReadFile(configFile)

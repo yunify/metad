@@ -35,15 +35,12 @@ func TestMetarepo(t *testing.T) {
 		storeClient.Delete("/")
 		//assert.Nil(t, err)
 
-		metastore := store.New()
-
-		selfMapping := make(map[string]map[string]string)
-		metarepo := New(false, selfMapping, storeClient, metastore)
+		metarepo := New(false, storeClient)
 		metarepo.StartSync()
 
 		testData := FillTestData(storeClient)
 		time.Sleep(1000 * time.Millisecond)
-		ValidTestData(t, testData, metastore)
+		ValidTestData(t, testData, metarepo.metastore)
 
 		val, ok := metarepo.Get("192.168.0.1", "/0")
 		assert.True(t, ok)
@@ -56,7 +53,6 @@ func TestMetarepo(t *testing.T) {
 		assert.True(t, mok)
 
 		storeClient.Delete("/0/0")
-
 		//TODO etcd current not support watch children delete. so try resync
 
 		metarepo.ReSync()
@@ -89,15 +85,12 @@ func TestMetarepoSelf(t *testing.T) {
 		storeClient.Delete("/")
 		//assert.Nil(t, err)
 
-		metastore := store.New()
-
-		selfMapping := make(map[string]map[string]string)
-		metarepo := New(false, selfMapping, storeClient, metastore)
+		metarepo := New(false, storeClient)
 		metarepo.StartSync()
 
 		testData := FillTestData(storeClient)
 		time.Sleep(1000 * time.Millisecond)
-		ValidTestData(t, testData, metastore)
+		ValidTestData(t, testData, metarepo.metastore)
 
 		val, ok := metarepo.Get("192.168.0.1", "/0")
 		assert.True(t, ok)
@@ -116,7 +109,7 @@ func TestMetarepoSelf(t *testing.T) {
 			mapping[key] = fmt.Sprintf("/%v", i)
 			metarepo.Register(ip, mapping)
 		}
-
+		time.Sleep(1000 * time.Millisecond)
 		p := rand.Intn(10)
 		ip := fmt.Sprintf("192.168.1.%v", p)
 
@@ -167,10 +160,7 @@ func TestMetarepoRoot(t *testing.T) {
 
 		FillTestData(storeClient)
 
-		metastore := store.New()
-
-		selfMapping := make(map[string]map[string]string)
-		metarepo := New(false, selfMapping, storeClient, metastore)
+		metarepo := New(false, storeClient)
 		metarepo.StartSync()
 		time.Sleep(1000 * time.Millisecond)
 

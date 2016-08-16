@@ -3,17 +3,15 @@ package etcd
 import (
 	"crypto/tls"
 	"crypto/x509"
-	"io/ioutil"
-	"net"
-	"net/http"
-	"time"
-
-	"fmt"
 	"github.com/coreos/etcd/client"
 	"github.com/yunify/metadata-proxy/log"
 	"github.com/yunify/metadata-proxy/store"
 	"github.com/yunify/metadata-proxy/util"
 	"golang.org/x/net/context"
+	"io/ioutil"
+	"net"
+	"net/http"
+	"time"
 )
 
 const SELF_MAPPING_PATH = "/_metadata-proxy/mapping"
@@ -149,7 +147,6 @@ func (c *Client) internalSync(prefix string, store store.Store, stopChan chan bo
 				time.Sleep(time.Duration(1000) * time.Millisecond)
 				continue
 			}
-			fmt.Printf("%v", val)
 			store.SetBulk(val)
 			inited = true
 		}
@@ -202,6 +199,7 @@ func (c *Client) Delete(key string) error {
 
 func (c *Client) internalDelete(prefix, key string) error {
 	key = util.AppendPathPrefix(key, prefix)
+	log.Debug("Delete from backend, key:%s", key)
 	_, err := c.client.Delete(context.Background(), key, &client.DeleteOptions{Recursive: true})
 	return err
 }
@@ -212,6 +210,14 @@ func (c *Client) SyncSelfMapping(mapping store.Store, stopChan chan bool) {
 
 func (c *Client) RegisterSelfMapping(clientIP string, mapping map[string]string) error {
 	prefix := util.AppendPathPrefix(clientIP, SELF_MAPPING_PATH)
+	oldMapping, _ := c.internalGetValues(prefix, "/")
+	if oldMapping != nil {
+		for k, _ := range oldMapping {
+			if _, ok := mapping[k]; !ok {
+				c.internalDelete(prefix, k)
+			}
+		}
+	}
 	return c.internalSetValue(prefix, mapping)
 }
 

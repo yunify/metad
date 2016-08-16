@@ -10,8 +10,11 @@ import (
 	"time"
 )
 
-func TestClientSync(t *testing.T) {
+func init() {
 	log.SetLevel("debug")
+}
+
+func TestClientSync(t *testing.T) {
 	backendNodes := []string{"etcd"}
 	prefix := fmt.Sprintf("/prefix%v", rand.Intn(1000))
 
@@ -58,7 +61,6 @@ func TestClientSync(t *testing.T) {
 }
 
 func TestSelfMapping(t *testing.T) {
-	log.SetLevel("debug")
 
 	backendNodes := []string{"etcd"}
 	prefix := fmt.Sprintf("/prefix%v", rand.Intn(1000))

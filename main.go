@@ -19,7 +19,6 @@ import (
 	"github.com/yunify/metadata-proxy/backends"
 	"github.com/yunify/metadata-proxy/log"
 	"github.com/yunify/metadata-proxy/metadata"
-	"github.com/yunify/metadata-proxy/store"
 	yaml "gopkg.in/yaml.v2"
 )
 
@@ -55,8 +54,8 @@ func main() {
 	if err != nil {
 		log.Fatal(err.Error())
 	}
-	metastore := store.New()
-	metadataRepo = metadata.New(config.OnlySelf, config.SelfMapping, storeClient, metastore)
+
+	metadataRepo = metadata.New(config.OnlySelf, storeClient)
 
 	metadataRepo.StartSync()
 

@@ -11,20 +11,22 @@ import (
 type Mapping map[string]string
 
 type MetadataRepo struct {
-	onlySelf    bool
-	selfMapping map[string]Mapping
-	storeClient backends.StoreClient
-	Metastore   store.Store
-	stopChan    chan bool
+	onlySelf        bool
+	selfMapping     store.Store
+	storeClient     backends.StoreClient
+	metastore       store.Store
+	metaStopChan    chan bool
+	mappingStopChan chan bool
 }
 
-func New(onlySelf bool, selfMapping map[string]Mapping, storeClient backends.StoreClient, metastore store.Store) *MetadataRepo {
+func New(onlySelf bool, storeClient backends.StoreClient) *MetadataRepo {
 	metadataRepo := MetadataRepo{
-		onlySelf:    onlySelf,
-		selfMapping: selfMapping,
-		storeClient: storeClient,
-		Metastore:   metastore,
-		stopChan:    make(chan bool),
+		onlySelf:        onlySelf,
+		selfMapping:     store.New(),
+		storeClient:     storeClient,
+		metastore:       store.New(),
+		metaStopChan:    make(chan bool),
+		mappingStopChan: make(chan bool),
 	}
 	return &metadataRepo
 }
@@ -34,13 +36,32 @@ func (r *MetadataRepo) SetOnlySelf(onlySelf bool) {
 }
 
 func (r *MetadataRepo) StartSync() {
-	r.storeClient.Sync(r.Metastore, r.stopChan)
+	log.Info("Start Sync")
+	r.startMetaSync()
+	r.startMappingSync()
+}
+
+func (r *MetadataRepo) startMetaSync() {
+	r.storeClient.Sync(r.metastore, r.metaStopChan)
+}
+
+func (r *MetadataRepo) startMappingSync() {
+	r.storeClient.SyncSelfMapping(r.selfMapping, r.mappingStopChan)
 }
 
 func (r *MetadataRepo) ReSync() {
-	r.stopChan <- true
-	r.Metastore.Delete("/")
-	r.storeClient.Sync(r.Metastore, r.stopChan)
+	log.Info("ReSync")
+	//TODO lock
+	r.StopSync()
+	r.metastore.Delete("/")
+	r.selfMapping.Delete("/")
+	r.StartSync()
+}
+
+func (r *MetadataRepo) StopSync() {
+	log.Info("Stop Sync")
+	r.metaStopChan <- true
+	r.mappingStopChan <- true
 }
 
 func (r *MetadataRepo) Get(clientIP string, metapath string) (interface{}, bool) {
@@ -59,7 +80,7 @@ func (r *MetadataRepo) Get(clientIP string, metapath string) (interface{}, bool)
 			return nil, false
 		}
 	} else {
-		val, ok := r.Metastore.Get(metapath)
+		val, ok := r.metastore.Get(metapath)
 		if !ok {
 			return nil, false
 		} else {
@@ -80,15 +101,16 @@ func (r *MetadataRepo) Get(clientIP string, metapath string) (interface{}, bool)
 func (r *MetadataRepo) GetSelf(clientIP string, metapath string) (interface{}, bool) {
 	metapath = path.Clean(path.Join("/", metapath))
 	log.Debug("GetSelf clientIP:%s metapath:%s", clientIP, metapath)
-	metakeys, ok := r.selfMapping[clientIP]
+	mapping, ok := r.SelfMapping(clientIP)
 	if !ok {
+		log.Warning("Can not find mapping for %s", clientIP)
 		return nil, false
 	}
 	if metapath == "/" {
 		meta := make(map[string]interface{})
-		for k, v := range metakeys {
+		for k, v := range mapping {
 			subpath := path.Clean(path.Join("/", v))
-			val, getOK := r.Metastore.Get(subpath)
+			val, getOK := r.metastore.Get(subpath)
 			if getOK {
 				meta[k] = val
 			} else {
@@ -97,12 +119,12 @@ func (r *MetadataRepo) GetSelf(clientIP string, metapath string) (interface{}, b
 		}
 		return meta, true
 	} else {
-		for k, v := range metakeys {
+		for k, v := range mapping {
 			keyPath := path.Clean(path.Join("/", k))
 			if strings.HasPrefix(metapath, keyPath) {
 				metapath = path.Clean(path.Join("/", strings.TrimPrefix(metapath, keyPath)))
 				nodePath := path.Clean(path.Join("/", v, metapath))
-				return r.Metastore.Get(nodePath)
+				return r.metastore.Get(nodePath)
 			}
 		}
 		log.Warning("Can not get self metadata by clientIP: %s path: %s", clientIP, metapath)
@@ -111,14 +133,27 @@ func (r *MetadataRepo) GetSelf(clientIP string, metapath string) (interface{}, b
 }
 
 func (r *MetadataRepo) SelfMapping(clientIP string) (map[string]string, bool) {
-	val, ok := r.selfMapping[clientIP]
-	return val, ok
+	mappingVal, ok := r.selfMapping.Get(clientIP)
+	if !ok {
+		return nil, false
+	}
+	mapping := make(map[string]string)
+	for k, v := range mappingVal.(map[string]interface{}) {
+		path, ok := v.(string)
+		if !ok {
+			log.Warning("self mapping value should be string : %v", v)
+			continue
+		}
+		mapping[k] = path
+	}
+	return mapping, true
 }
 
 func (r *MetadataRepo) Register(clientIP string, mapping Mapping) {
-	r.selfMapping[clientIP] = mapping
+	r.storeClient.RegisterSelfMapping(clientIP, mapping)
 }
 
 func (r *MetadataRepo) Unregister(clientIP string) {
-	delete(r.selfMapping, clientIP)
+	r.storeClient.UnregisterSelfMapping(clientIP)
+	r.selfMapping.Delete(clientIP)
 }
