@@ -90,7 +90,6 @@ func TestSelfMapping(t *testing.T) {
 			storeClient.RegisterSelfMapping(ip, mapping)
 		}
 		time.Sleep(1000 * time.Millisecond)
-		meta, _ := metastore.Get("/")
 		for i := 0; i < 10; i++ {
 			ip := fmt.Sprintf("192.168.1.%v", i)
 			val, ok := metastore.Get(ip)
