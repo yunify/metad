@@ -143,6 +143,20 @@ func (c *Client) internalSync(prefix string, store store.Store, stopChan chan bo
 		if !inited {
 			val, err := c.internalGetValues(prefix, "/")
 			if err != nil {
+				switch e := err.(type) {
+				case *client.Error:
+					//if key of prefix is not exist, just create a empty dir.
+					if e.Code == client.ErrorCodeKeyNotFound {
+						resp, createErr := c.client.Set(context.Background(), prefix, "", &client.SetOptions{
+							Dir:true,
+						})
+						if createErr != nil {
+							log.Error("Create dir %s error: %s", prefix, createErr.Error())
+						}else{
+							log.Info("Create dir %s resp: %v", prefix, resp)
+						}
+					}
+				}
 				log.Error("GetValue from etcd key:%s error: %s", prefix, err.Error())
 				time.Sleep(time.Duration(1000) * time.Millisecond)
 				continue
