@@ -12,6 +12,7 @@ import (
 	"net"
 	"net/http"
 	"time"
+	"reflect"
 )
 
 const SELF_MAPPING_PATH = "/_metadata-proxy/mapping"
@@ -140,11 +141,12 @@ func (c *Client) internalSync(prefix string, store store.Store, stopChan chan bo
 			}
 		}()
 
-		if !inited {
+		for !inited {
 			val, err := c.internalGetValues(prefix, "/")
 			if err != nil {
+				log.Error("GetValue from etcd key:%s, error-type: %s, error: %s", prefix, reflect.TypeOf(err), err.Error())
 				switch e := err.(type) {
-				case *client.Error:
+				case client.Error:
 					//if key of prefix is not exist, just create a empty dir.
 					if e.Code == client.ErrorCodeKeyNotFound {
 						resp, createErr := c.client.Set(context.Background(), prefix, "", &client.SetOptions{
@@ -157,7 +159,6 @@ func (c *Client) internalSync(prefix string, store store.Store, stopChan chan bo
 						}
 					}
 				}
-				log.Error("GetValue from etcd key:%s error: %s", prefix, err.Error())
 				time.Sleep(time.Duration(1000) * time.Millisecond)
 				continue
 			}
