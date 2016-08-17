@@ -3,10 +3,10 @@
 
 `metadata-proxy` is a metadata server support the following features:
 
-* **self** semantic support. metadata-proxy keep a mapping of IP and metadata, client direct request "/self", will get the metadata of this node. mapping settings will store to backend (etcd).
+* **self** semantic support. metadata-proxy keep a mapping of IP and metadata, client direct request "/self", will get the metadata of this node. mapping settings is store to backend (etcd).
 * metadata backend support [etcd](https://github.com/coreos/etcd) (TODO support more).
 * support metadata local cache, so it can be used as a proxy to reducing the request pressure of backend (etcd).
-* api out format support json/yaml/text,and metadata/developer friendly data structure.
+* api out format support json/yaml/text,and is metadata/developer friendly data structure.
 * support as [confd](https://github.com/kelseyhightower/confd) backend(TODO).
 
 [中文文档](README_zh.md)
