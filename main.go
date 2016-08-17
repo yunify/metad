@@ -13,7 +13,7 @@ import (
 	"sort"
 	"strings"
 	"syscall"
-	"github.com/yunify/metadata-proxy/util/httputil"
+	"github.com/golang/gddo/httputil"
 	"github.com/gorilla/mux"
 	"github.com/yunify/metadata-proxy/backends"
 	"github.com/yunify/metadata-proxy/log"
