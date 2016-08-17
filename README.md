@@ -9,7 +9,7 @@
 * api out format support json/yaml/text,and metadata/developer friendly data structure.
 * support as [confd](https://github.com/kelseyhightower/confd) backend(TODO).
 
-[中文文档](./README_zh.md)
+[中文文档](README_zh.md)
 
 ## Building
 
