@@ -72,22 +72,22 @@ type Config struct {
 
 func init() {
 	flag.BoolVar(&printVersion, "version", false, "Show version")
-	flag.StringVar(&configFile, "config", "", "config file")
-	flag.StringVar(&backend, "backend", "etcd", "backend to use")
-	flag.StringVar(&logLevel, "log_level", "info", "set log level: debug|info|warning")
+	flag.StringVar(&configFile, "config", "", "Cconfig file")
+	flag.StringVar(&backend, "backend", "etcd", "Backend to use")
+	flag.StringVar(&logLevel, "log_level", "info", "Set log level: debug|info|warning")
 	flag.StringVar(&pidFile, "pid_file", "", "PID to write to")
 	flag.BoolVar(&enableXff, "xff", false, "X-Forwarded-For header support")
-	flag.StringVar(&prefix, "prefix", "", "default backend key prefix")
-	flag.BoolVar(&onlySelf, "only_self", false, "only support self metadata query.")
+	flag.StringVar(&prefix, "prefix", "", "Default backend key prefix")
+	flag.BoolVar(&onlySelf, "only_self", false, "Only support self metadata query.")
 	flag.StringVar(&listen, "listen", ":80", "Address to listen to (TCP)")
-	flag.StringVar(&listenManage, "listen_manage", "127.0.0.1:8112", "Address to listen to for reload requests (TCP)")
+	flag.StringVar(&listenManage, "listen_manage", "127.0.0.1:8112", "Address to listen to for manage requests (TCP)")
 	flag.BoolVar(&basicAuth, "basic_auth", false, "Use Basic Auth to authenticate (only used with -backend=etcd)")
-	flag.StringVar(&clientCaKeys, "client_ca_keys", "", "client ca keys")
-	flag.StringVar(&clientCert, "client_cert", "", "the client cert")
-	flag.StringVar(&clientKey, "client_key", "", "the client key")
-	flag.Var(&nodes, "node", "list of backend nodes")
-	flag.StringVar(&username, "username", "", "the username to authenticate as (only used with etcd backends)")
-	flag.StringVar(&password, "password", "", "the password to authenticate with (only used with etcd backends)")
+	flag.StringVar(&clientCaKeys, "client_ca_keys", "", "The client ca keys")
+	flag.StringVar(&clientCert, "client_cert", "", "The client cert")
+	flag.StringVar(&clientKey, "client_key", "", "The client key")
+	flag.Var(&nodes, "node", "List of backend nodes")
+	flag.StringVar(&username, "username", "", "The username to authenticate as (only used with etcd backends)")
+	flag.StringVar(&password, "password", "", "The password to authenticate with (only used with etcd backends)")
 }
 
 func initConfig() error {
@@ -101,14 +101,8 @@ func initConfig() error {
 		ListenManage: "127.0.0.1:8112",
 	}
 	if configFile != "" {
-		data, err := ioutil.ReadFile(configFile)
+		err := loadConfigFile(configFile, &config)
 		if err != nil {
-			log.Warning("Failed to read config file: %s, err: %s", configFile, err.Error())
-			return err
-		}
-		err = yaml.Unmarshal(data, &config)
-		if err != nil {
-			log.Warning("Failed to parse config file: %s, err: %s", configFile, err.Error())
 			return err
 		}
 	}
@@ -141,6 +135,20 @@ func initConfig() error {
 		BackendNodes: config.BackendNodes,
 		Password:     config.Password,
 		Username:     config.Username,
+	}
+	return nil
+}
+
+func loadConfigFile(configFile string, config *Config) error {
+	data, err := ioutil.ReadFile(configFile)
+	if err != nil {
+		log.Warning("Failed to read config file: %s, err: %s", configFile, err.Error())
+		return err
+	}
+	err = yaml.Unmarshal(data, config)
+	if err != nil {
+		log.Warning("Failed to parse config file: %s, err: %s", configFile, err.Error())
+		return err
 	}
 	return nil
 }

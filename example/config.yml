@@ -1,0 +1,31 @@
+# Backend type
+backend: etcd
+# Set log level: debug|info|warning
+log_level: debug
+pid_file: /var/run/metadata-proxy.pid
+# X-Forwarded-For header support"
+xff: true
+# Default backend key prefix
+prefix: /users/uid1
+# Only support self metadata query
+only_self: false
+# Address to listen to (TCP)
+listen: :80
+# Address to listen to for manage requests (TCP)
+listen_manage: 127.0.0.1:8112
+# Use Basic Auth to authenticate (only used with -backend=etcd)
+basic_auth: true
+# The client ca keys
+client_ca_keys: /opt/metadata-proxy/client_ca_keys
+# The client cert
+client_cert: /opt/metadata-proxy/client_cert
+# The client key
+client_key: /opt/metadata-proxy/client_key
+# List of backend nodes
+nodes:
+- 192.168.11.1:2379
+- 192.168.11.2:2379
+# The username to authenticate as (only used with etcd backends)
+username: username
+# The password to authenticate with (only used with etcd backends)
+password: password
