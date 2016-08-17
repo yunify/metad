@@ -85,7 +85,7 @@ func init() {
 	flag.StringVar(&clientCaKeys, "client_ca_keys", "", "The client ca keys")
 	flag.StringVar(&clientCert, "client_cert", "", "The client cert")
 	flag.StringVar(&clientKey, "client_key", "", "The client key")
-	flag.Var(&nodes, "node", "List of backend nodes")
+	flag.Var(&nodes, "nodes", "List of backend nodes")
 	flag.StringVar(&username, "username", "", "The username to authenticate as (only used with etcd backends)")
 	flag.StringVar(&password, "password", "", "The password to authenticate with (only used with etcd backends)")
 }
