@@ -4,6 +4,12 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"github.com/golang/gddo/httputil"
+	"github.com/gorilla/mux"
+	"github.com/yunify/metadata-proxy/backends"
+	"github.com/yunify/metadata-proxy/log"
+	"github.com/yunify/metadata-proxy/metadata"
+	yaml "gopkg.in/yaml.v2"
 	"io"
 	"net"
 	"net/http"
@@ -13,12 +19,6 @@ import (
 	"sort"
 	"strings"
 	"syscall"
-	"github.com/golang/gddo/httputil"
-	"github.com/gorilla/mux"
-	"github.com/yunify/metadata-proxy/backends"
-	"github.com/yunify/metadata-proxy/log"
-	"github.com/yunify/metadata-proxy/metadata"
-	yaml "gopkg.in/yaml.v2"
 )
 
 const (
@@ -52,6 +52,7 @@ func main() {
 	storeClient, err = backends.New(backendsConfig)
 	if err != nil {
 		log.Fatal(err.Error())
+		os.Exit(-1)
 	}
 
 	metadataRepo = metadata.New(config.OnlySelf, storeClient)
@@ -97,6 +98,20 @@ func watchSignals() {
 				resp <- err
 			}
 		}
+	}()
+
+	notifier := make(chan os.Signal, 1)
+	signal.Notify(notifier, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		sig := <-notifier
+		log.Info("Received stop signal")
+		signal.Stop(notifier)
+		pid := syscall.Getpid()
+		// exit directly if it is the "init" process, since the kernel will not help to kill pid 1.
+		if pid == 1 {
+			os.Exit(0)
+		}
+		syscall.Kill(pid, sig.(syscall.Signal))
 	}()
 }
 
