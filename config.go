@@ -73,7 +73,7 @@ type Config struct {
 func init() {
 	flag.BoolVar(&printVersion, "version", false, "Show version")
 	flag.StringVar(&configFile, "config", "", "Cconfig file")
-	flag.StringVar(&backend, "backend", "etcd", "Backend to use")
+	flag.StringVar(&backend, "backend", "etcdv3", "Backend to use")
 	flag.StringVar(&logLevel, "log_level", "info", "Set log level: debug|info|warning")
 	flag.StringVar(&pidFile, "pid_file", "", "PID to write to")
 	flag.BoolVar(&enableXff, "xff", false, "X-Forwarded-For header support")
@@ -94,7 +94,7 @@ func initConfig() error {
 
 	// Set defaults.
 	config = Config{
-		Backend:      "etcd",
+		Backend:      "etcdv3",
 		Prefix:       "",
 		LogLevel:     "info",
 		Listen:       ":80",

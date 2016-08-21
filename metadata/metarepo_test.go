@@ -17,7 +17,7 @@ func init() {
 
 func TestMetarepo(t *testing.T) {
 
-	backendNodes := []string{"etcd"}
+	backendNodes := []string{"etcdv3", "etcd"}
 	prefix := fmt.Sprintf("/prefix%v", rand.Intn(1000))
 
 	for _, backend := range backendNodes {
@@ -67,7 +67,7 @@ func TestMetarepo(t *testing.T) {
 
 func TestMetarepoSelf(t *testing.T) {
 
-	backendNodes := []string{"etcd"}
+	backendNodes := []string{"etcdv3", "etcd"}
 	prefix := fmt.Sprintf("/prefix%v", rand.Intn(1000))
 
 	for _, backend := range backendNodes {
@@ -126,10 +126,11 @@ func TestMetarepoSelf(t *testing.T) {
 
 		storeClient.Delete("/0/0")
 
-		//TODO etcd current not support watch children delete. so try resync
-
-		metarepo.ReSync()
-		time.Sleep(1000 * time.Millisecond)
+		if backend == "etcd" {
+			//etcd v2 current not support watch children's children delete. so try resync
+			metarepo.ReSync()
+			time.Sleep(1000 * time.Millisecond)
+		}
 
 		val, ok = metarepo.GetSelf("192.168.1.0", "/s0/0")
 		assert.False(t, ok)
@@ -141,7 +142,7 @@ func TestMetarepoSelf(t *testing.T) {
 
 func TestMetarepoRoot(t *testing.T) {
 
-	backendNodes := []string{"etcd"}
+	backendNodes := []string{"etcdv3", "etcd"}
 	prefix := fmt.Sprintf("/prefix%v", rand.Intn(1000))
 
 	for _, backend := range backendNodes {
@@ -166,8 +167,9 @@ func TestMetarepoRoot(t *testing.T) {
 
 		ip := "192.168.1.0"
 		mapping := make(map[string]string)
+		mapping["nodes"] = fmt.Sprintf("%s/1/0", prefix)
 		metarepo.Register(ip, mapping)
-
+		time.Sleep(1000 * time.Millisecond)
 		val, ok := metarepo.Get(ip, "/")
 		assert.True(t, ok)
 		mapVal, mok := val.(map[string]interface{})

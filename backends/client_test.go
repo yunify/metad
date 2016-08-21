@@ -15,14 +15,15 @@ func init() {
 }
 
 func TestClientSync(t *testing.T) {
-	backendNodes := []string{"etcd"}
+	backendNodes := []string{"etcdv3", "etcd"}
 	prefix := fmt.Sprintf("/prefix%v", rand.Intn(1000))
 
-	stopChan := make(chan bool)
-	defer func() {
-		stopChan <- true
-	}()
 	for _, backend := range backendNodes {
+		println("Test backend: ", backend)
+		stopChan := make(chan bool)
+		defer func() {
+			stopChan <- true
+		}()
 
 		nodes := GetDefaultBackends(backend)
 
@@ -62,15 +63,15 @@ func TestClientSync(t *testing.T) {
 
 func TestSelfMapping(t *testing.T) {
 
-	backendNodes := []string{"etcd"}
+	backendNodes := []string{"etcdv3", "etcd"}
 	prefix := fmt.Sprintf("/prefix%v", rand.Intn(1000))
 
-	stopChan := make(chan bool)
-	defer func() {
-		stopChan <- true
-	}()
 	for _, backend := range backendNodes {
-
+		println("Test backend: ", backend)
+		stopChan := make(chan bool)
+		defer func() {
+			stopChan <- true
+		}()
 		nodes := GetDefaultBackends(backend)
 
 		config := Config{
