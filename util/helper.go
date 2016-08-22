@@ -6,10 +6,22 @@ import (
 )
 
 func TrimPathPrefix(metapath string, prefix string) string {
-	if prefix == "" || prefix == "/" {
+	prefix = path.Join("/", prefix)
+
+	if prefix == "/" {
 		return metapath
 	}
-	return strings.TrimPrefix(metapath, prefix)
+
+	if prefix == metapath {
+		return "/"
+	}
+
+	if prefix[len(prefix)-1] != '/' {
+		prefix = prefix + "/"
+	}
+	metapath = path.Join("/", metapath)
+
+	return path.Clean(path.Join("/", strings.TrimPrefix(metapath, prefix)))
 }
 
 func TrimPathPrefixBatch(meta map[string]string, prefix string) map[string]string {
@@ -22,8 +34,9 @@ func TrimPathPrefixBatch(meta map[string]string, prefix string) map[string]strin
 }
 
 func AppendPathPrefix(metapath string, prefix string) string {
-	if prefix == "" || prefix == "/" {
+	if strings.TrimSpace(metapath) == "" {
 		return metapath
 	}
+	prefix = path.Join("/", prefix)
 	return path.Clean(path.Join(prefix, metapath))
 }
