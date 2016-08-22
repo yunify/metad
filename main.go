@@ -19,6 +19,7 @@ import (
 	"sort"
 	"strings"
 	"syscall"
+	"time"
 )
 
 const (
@@ -34,6 +35,14 @@ var (
 )
 
 func main() {
+
+	defer func() {
+		if r := recover(); r != nil {
+			log.Error("Main Recover: %v, try restart.", r)
+			time.Sleep(time.Duration(1000) * time.Millisecond)
+			main()
+		}
+	}()
 
 	flag.Parse()
 

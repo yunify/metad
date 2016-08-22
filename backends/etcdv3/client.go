@@ -127,6 +127,15 @@ func handleGetResp(prefix string, resp *client.GetResponse, vars map[string]stri
 }
 
 func (c *Client) internalSync(prefix string, store store.Store, stopChan chan bool) {
+
+	defer func() {
+		if r := recover(); r != nil {
+			log.Error("Sync Recover: %v, try restart.", r)
+			time.Sleep(time.Duration(1000) * time.Millisecond)
+			c.internalSync(prefix, store, stopChan)
+		}
+	}()
+
 	var rev int64 = 0
 	inited := false
 	for {
