@@ -5,21 +5,132 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/yunify/metadata-proxy/log"
 	"github.com/yunify/metadata-proxy/store"
+	"github.com/yunify/metadata-proxy/util/flatmap"
 	"math/rand"
 	"testing"
 	"time"
+)
+
+var (
+	backendNodes = []string{
+		"etcd",
+		"etcdv3",
+	}
 )
 
 func init() {
 	log.SetLevel("debug")
 }
 
+func TestClientGetSet(t *testing.T) {
+	for _, backend := range backendNodes {
+		println("Test backend: ", backend)
+
+		prefix := fmt.Sprintf("/prefix%v", rand.Intn(1000))
+
+		nodes := GetDefaultBackends(backend)
+
+		config := Config{
+			Backend:      backend,
+			BackendNodes: nodes,
+			Prefix:       prefix,
+		}
+		storeClient, err := New(config)
+		assert.NoError(t, err)
+
+		storeClient.Delete("/", true)
+
+		err = storeClient.SetValue("testkey", "testvalue")
+		assert.NoError(t, err)
+
+		val, getErr := storeClient.GetValue("testkey")
+		assert.NoError(t, getErr)
+		assert.Equal(t, "testvalue", val)
+
+		// test no exist key
+		val, getErr = storeClient.GetValue("noexistkey")
+		assert.NoError(t, getErr)
+		assert.Equal(t, "", val)
+
+		storeClient.Delete("/", true)
+	}
+}
+
+func TestClientGetsSets(t *testing.T) {
+	for _, backend := range backendNodes {
+		println("Test backend: ", backend)
+
+		prefix := fmt.Sprintf("/prefix%v", rand.Intn(1000))
+
+		nodes := GetDefaultBackends(backend)
+
+		config := Config{
+			Backend:      backend,
+			BackendNodes: nodes,
+			Prefix:       prefix,
+		}
+		storeClient, err := New(config)
+		assert.NoError(t, err)
+
+		storeClient.Delete("/", true)
+
+		values := map[string]interface{}{
+			"subkey1": map[string]interface{}{
+				"subkey1sub1": "subsubvalue1",
+				"subkey1sub2": "subsubvalue2",
+			},
+		}
+
+		err = storeClient.SetValues("testkey", values, true)
+		assert.NoError(t, err)
+
+		val, getErr := storeClient.GetValues("testkey")
+		assert.NoError(t, getErr)
+		assert.Equal(t, values, val)
+
+		//test update
+
+		values2 := map[string]interface{}{
+			"subkey1": map[string]interface{}{
+				"subkey1sub3": "subsubvalue3",
+			},
+		}
+
+		err = storeClient.SetValues("testkey", values2, false)
+		assert.NoError(t, err)
+
+		values3 := map[string]interface{}{
+			"subkey1": map[string]interface{}{
+				"subkey1sub1": "subsubvalue1",
+				"subkey1sub2": "subsubvalue2",
+				"subkey1sub3": "subsubvalue3",
+			},
+		}
+
+		val, getErr = storeClient.GetValues("testkey")
+		assert.NoError(t, getErr)
+		assert.Equal(t, values3, val)
+
+		//test replace
+
+		err = storeClient.SetValues("testkey", values2, true)
+		assert.NoError(t, err)
+
+		val, getErr = storeClient.GetValues("testkey")
+		assert.NoError(t, getErr)
+		assert.Equal(t, values2, val)
+
+		assert.NoError(t, storeClient.Delete("/", true))
+	}
+}
+
 func TestClientSync(t *testing.T) {
-	backendNodes := []string{"etcdv3", "etcd"}
-	prefix := fmt.Sprintf("/prefix%v", rand.Intn(1000))
 
 	for _, backend := range backendNodes {
 		println("Test backend: ", backend)
+
+		prefix := fmt.Sprintf("/prefix%v", rand.Intn(1000))
+
 		stopChan := make(chan bool)
 		defer func() {
 			stopChan <- true
@@ -33,10 +144,10 @@ func TestClientSync(t *testing.T) {
 			Prefix:       prefix,
 		}
 		storeClient, err := New(config)
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 
-		storeClient.Delete("/")
-		//assert.Nil(t, err)
+		storeClient.Delete("/", true)
+		//assert.NoError(t, err)
 
 		metastore := store.New()
 		storeClient.Sync(metastore, stopChan)
@@ -57,13 +168,12 @@ func TestClientSync(t *testing.T) {
 		assert.False(t, ok)
 		assert.Nil(t, val)
 
-		storeClient.Delete("/")
+		storeClient.Delete("/", true)
 	}
 }
 
 func TestSelfMapping(t *testing.T) {
 
-	backendNodes := []string{"etcdv3", "etcd"}
 	prefix := fmt.Sprintf("/prefix%v", rand.Intn(1000))
 
 	for _, backend := range backendNodes {
@@ -80,7 +190,7 @@ func TestSelfMapping(t *testing.T) {
 			Prefix:       prefix,
 		}
 		storeClient, err := New(config)
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 
 		metastore := store.New()
 		storeClient.SyncSelfMapping(metastore, stopChan)
@@ -90,7 +200,7 @@ func TestSelfMapping(t *testing.T) {
 			mapping := map[string]string{
 				"instance": fmt.Sprintf("/instances/%v", i),
 			}
-			storeClient.RegisterSelfMapping(ip, mapping)
+			storeClient.RegisterSelfMapping(ip, mapping, true)
 		}
 		time.Sleep(1000 * time.Millisecond)
 		for i := 0; i < 10; i++ {
@@ -106,19 +216,19 @@ func TestSelfMapping(t *testing.T) {
 }
 
 func FillTestData(storeClient StoreClient) map[string]string {
-	testData := make(map[string]string)
+	testData := make(map[string]interface{})
 	for i := 0; i < 10; i++ {
+		ci := make(map[string]string)
 		for j := 0; j < 10; j++ {
-			key := fmt.Sprintf("/%v/%v", i, j)
-			val := fmt.Sprintf("%v-%v", i, j)
-			testData[key] = val
+			ci[fmt.Sprintf("%v", j)] = fmt.Sprintf("%v-%v", i, j)
 		}
+		testData[fmt.Sprintf("%v", i)] = ci
 	}
-	err := storeClient.SetValues(testData)
+	err := storeClient.SetValues("/", testData, true)
 	if err != nil {
 		log.Error("SetValues error", err.Error())
 	}
-	return testData
+	return flatmap.Flatten(testData)
 }
 
 func RandomUpdate(testData map[string]string, storeClient StoreClient, times int) {
@@ -132,8 +242,7 @@ func RandomUpdate(testData map[string]string, storeClient StoreClient, times int
 		key := keys[idx]
 		val := testData[key]
 		newVal := fmt.Sprintf("%s-%v", val, 0)
-
-		storeClient.SetValues(map[string]string{key: newVal})
+		storeClient.SetValue(key, newVal)
 		testData[key] = newVal
 	}
 }
@@ -146,7 +255,7 @@ func RandomDelete(testData map[string]string, storeClient StoreClient) string {
 	}
 	idx := rand.Intn(length)
 	key := keys[idx]
-	storeClient.Delete(key)
+	storeClient.Delete(key, false)
 	delete(testData, key)
 	return key
 }

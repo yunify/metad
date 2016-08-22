@@ -62,7 +62,7 @@ func TestStoreBulk(t *testing.T) {
 		values[fmt.Sprintf("/clusters/%v/ip", i)] = fmt.Sprintf("192.168.0.%v", i)
 		values[fmt.Sprintf("/clusters/%v/name", i)] = fmt.Sprintf("cluster-%v", i)
 	}
-	store.SetBulk(values)
+	store.SetBulk("/", values)
 
 	val, ok := store.Get("/clusters/10")
 	assert.True(t, ok)
@@ -73,4 +73,33 @@ func TestStoreBulk(t *testing.T) {
 	assert.True(t, ok)
 	assert.Equal(t, "192.168.0.1", val)
 
+}
+
+func TestStoreSets(t *testing.T) {
+	store := New()
+
+	values := make(map[string]interface{})
+	for i := 1; i <= 10; i++ {
+		values[fmt.Sprintf("%v", i)] = map[string]interface{}{
+			"ip":   fmt.Sprintf("192.168.0.%v", i),
+			"name": fmt.Sprintf("cluster-%v", i),
+		}
+	}
+	store.Sets("/clusters", values)
+
+	val, ok := store.Get("/clusters/10")
+	assert.True(t, ok)
+
+	fmt.Printf("%v", val)
+
+	val, ok = store.Get("/clusters/1/ip")
+	assert.True(t, ok)
+	assert.Equal(t, "192.168.0.1", val)
+
+}
+
+func TestStoreSet(t *testing.T) {
+	store := New()
+	store.Set("/cl-fctugrij/cmd/i-tasp99rb/a/b/c/d/e/f/g/id", false, "iTQsRC5MqeBxaoUJSH3dMkf5e8OxMF8JxH1j")
+	store.Set("/cl-fctugrij/cmd/i-tasp99rb/a/b/c/d/e/f/g/id", false, "")
 }

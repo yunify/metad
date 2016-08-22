@@ -12,12 +12,16 @@ import (
 // The StoreClient interface is implemented by objects that can retrieve
 // key/value pairs from a backend store.
 type StoreClient interface {
-	GetValues(key string) (map[string]string, error)
+	GetValues(key string) (map[string]interface{}, error)
+	GetValue(key string) (string, error)
 	Sync(store store.Store, stopChan chan bool)
-	SetValues(values map[string]string) error
-	Delete(key string) error
+	SetValues(key string, values map[string]interface{}, replace bool) error
+	SetValue(key string, value string) error
+	// Delete
+	// if the 'key' represent a dir, 'dir' should be true.
+	Delete(key string, dir bool) error
 	SyncSelfMapping(mapping store.Store, stopChan chan bool)
-	RegisterSelfMapping(clientIP string, mapping map[string]string) error
+	RegisterSelfMapping(clientIP string, mapping map[string]string, replace bool) error
 	UnregisterSelfMapping(clientIP string) error
 }
 

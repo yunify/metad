@@ -7,6 +7,7 @@ import (
 	"github.com/yunify/metadata-proxy/log"
 	"github.com/yunify/metadata-proxy/store"
 	"github.com/yunify/metadata-proxy/util"
+	"github.com/yunify/metadata-proxy/util/flatmap"
 	"golang.org/x/net/context"
 	"io/ioutil"
 	"net"
@@ -86,41 +87,75 @@ func NewEtcdClient(prefix string, machines []string, cert, key, caCert string, b
 }
 
 // GetValues queries etcd for key Recursive:true.
-func (c *Client) GetValues(key string) (map[string]string, error) {
-	return c.internalGetValues(c.prefix, key)
+func (c *Client) GetValues(key string) (map[string]interface{}, error) {
+	m, err := c.internalGetValues(c.prefix, key)
+	if err != nil {
+		return nil, err
+	}
+	return flatmap.Expand(m, util.AppendPathPrefix(key, c.prefix)), nil
 }
 
 func (c *Client) internalGetValues(prefix, key string) (map[string]string, error) {
 	vars := make(map[string]string)
-	resp, err := c.client.Get(context.Background(), util.AppendPathPrefix(key, prefix), &client.GetOptions{
+	key = util.AppendPathPrefix(key, prefix)
+	resp, err := c.client.Get(context.Background(), key, &client.GetOptions{
 		Recursive: true,
 		Sort:      true,
 		Quorum:    true,
 	})
 	if err != nil {
+		switch e := err.(type) {
+		case client.Error:
+			//if key is not exist, just return empty map.
+			if e.Code == client.ErrorCodeKeyNotFound {
+				log.Warning("GetValues key:%s ErrorCodeKeyNotFound", key)
+				return make(map[string]string), nil
+			}
+		}
 		return nil, err
 	}
-	err = nodeWalk(prefix, resp.Node, vars)
+	err = nodeWalk(resp.Node, vars)
 	if err != nil {
-		return vars, err
+		return nil, err
 	}
+	log.Debug("GetValues key:%s, values:%v", key, vars)
 	return vars, nil
 }
 
 // nodeWalk recursively descends nodes, updating vars.
-func nodeWalk(prefix string, node *client.Node, vars map[string]string) error {
+func nodeWalk(node *client.Node, vars map[string]string) error {
 	if node != nil {
 		key := node.Key
 		if !node.Dir {
-			key = util.TrimPathPrefix(key, prefix)
+			//key = util.TrimPathPrefix(key, prefix)
 			vars[key] = node.Value
 		} else {
 			for _, node := range node.Nodes {
-				nodeWalk(prefix, node, vars)
+				nodeWalk(node, vars)
 			}
 		}
 	}
 	return nil
+}
+
+// GetValue queries etcd for key
+func (c *Client) GetValue(key string) (string, error) {
+	return c.internalGetValue(c.prefix, key)
+}
+
+func (c *Client) internalGetValue(prefix, key string) (string, error) {
+	resp, err := c.client.Get(context.Background(), util.AppendPathPrefix(key, prefix), nil)
+	if err != nil {
+		switch e := err.(type) {
+		case client.Error:
+			//if key is not exist, just return empty str.
+			if e.Code == client.ErrorCodeKeyNotFound {
+				return "", nil
+			}
+		}
+		return "", err
+	}
+	return resp.Node.Value, nil
 }
 
 func (c *Client) internalSync(prefix string, store store.Store, stopChan chan bool) {
@@ -142,7 +177,7 @@ func (c *Client) internalSync(prefix string, store store.Store, stopChan chan bo
 		}()
 
 		for !inited {
-			val, err := c.internalGetValues(prefix, "/")
+			val, err := c.GetValues("/")
 			if err != nil {
 				log.Error("GetValue from etcd key:%s, error-type: %s, error: %s", prefix, reflect.TypeOf(err), err.Error())
 				switch e := err.(type) {
@@ -162,7 +197,7 @@ func (c *Client) internalSync(prefix string, store store.Store, stopChan chan bo
 				time.Sleep(time.Duration(1000) * time.Millisecond)
 				continue
 			}
-			store.SetBulk(val)
+			store.Sets("/", val)
 			inited = true
 		}
 
@@ -193,14 +228,20 @@ func (c *Client) Sync(store store.Store, stopChan chan bool) {
 	go c.internalSync(c.prefix, store, stopChan)
 }
 
-func (c *Client) SetValues(values map[string]string) error {
-	return c.internalSetValue(c.prefix, values)
+func (c *Client) SetValues(key string, values map[string]interface{}, replace bool) error {
+	flatValue := flatmap.Flatten(values)
+	return c.internalSetValues(c.prefix, key, flatValue, replace)
 }
 
-func (c *Client) internalSetValue(prefix string, values map[string]string) error {
+func (c *Client) internalSetValues(prefix string, key string, values map[string]string, replace bool) error {
+	if replace {
+		c.internalDelete(prefix, key, true)
+	}
+	new_prefix := util.AppendPathPrefix(key, prefix)
 	for k, v := range values {
-		k = util.AppendPathPrefix(k, prefix)
-		_, err := c.client.Set(context.Background(), k, v, nil)
+		k = util.AppendPathPrefix(k, new_prefix)
+		resp, err := c.client.Set(context.TODO(), k, v, nil)
+		log.Debug("SetValue key:%s, value:%s, resp:%v", k, v, resp)
 		if err != nil {
 			return err
 		}
@@ -208,14 +249,28 @@ func (c *Client) internalSetValue(prefix string, values map[string]string) error
 	return nil
 }
 
-func (c *Client) Delete(key string) error {
-	return c.internalDelete(c.prefix, key)
+func (c *Client) SetValue(key string, value string) error {
+	return c.internalSetValue(c.prefix, key, value)
 }
 
-func (c *Client) internalDelete(prefix, key string) error {
+func (c *Client) internalSetValue(prefix string, key string, value string) error {
 	key = util.AppendPathPrefix(key, prefix)
-	log.Debug("Delete from backend, key:%s", key)
-	_, err := c.client.Delete(context.Background(), key, &client.DeleteOptions{Recursive: true})
+	resp, err := c.client.Set(context.TODO(), key, value, nil)
+	log.Debug("SetValue key: %s, value:%s, resp:%v", key, value, resp)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (c *Client) Delete(key string, dir bool) error {
+	return c.internalDelete(c.prefix, key, dir)
+}
+
+func (c *Client) internalDelete(prefix, key string, dir bool) error {
+	key = util.AppendPathPrefix(key, prefix)
+	log.Debug("Delete from backend, key:%s, dir:%v", key, dir)
+	_, err := c.client.Delete(context.Background(), key, &client.DeleteOptions{Recursive: dir})
 	return err
 }
 
@@ -223,19 +278,10 @@ func (c *Client) SyncSelfMapping(mapping store.Store, stopChan chan bool) {
 	go c.internalSync(SELF_MAPPING_PATH, mapping, stopChan)
 }
 
-func (c *Client) RegisterSelfMapping(clientIP string, mapping map[string]string) error {
-	prefix := util.AppendPathPrefix(clientIP, SELF_MAPPING_PATH)
-	oldMapping, _ := c.internalGetValues(prefix, "/")
-	if oldMapping != nil {
-		for k, _ := range oldMapping {
-			if _, ok := mapping[k]; !ok {
-				c.internalDelete(prefix, k)
-			}
-		}
-	}
-	return c.internalSetValue(prefix, mapping)
+func (c *Client) RegisterSelfMapping(clientIP string, mapping map[string]string, replace bool) error {
+	return c.internalSetValues(SELF_MAPPING_PATH, clientIP, mapping, replace)
 }
 
 func (c *Client) UnregisterSelfMapping(clientIP string) error {
-	return c.internalDelete(SELF_MAPPING_PATH, clientIP)
+	return c.internalDelete(SELF_MAPPING_PATH, clientIP, true)
 }

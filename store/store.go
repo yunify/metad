@@ -1,6 +1,8 @@
 package store
 
 import (
+	"github.com/yunify/metadata-proxy/util"
+	"github.com/yunify/metadata-proxy/util/flatmap"
 	"path"
 	"strings"
 	"sync"
@@ -9,8 +11,9 @@ import (
 type Store interface {
 	Get(nodePath string) (interface{}, bool)
 	Set(nodePath string, dir bool, value string)
+	Sets(nodePath string, values map[string]interface{})
 	Delete(nodePath string)
-	SetBulk(value map[string]string)
+	SetBulk(nodePath string, value map[string]string)
 }
 
 type store struct {
@@ -54,12 +57,26 @@ func (s *store) Set(nodePath string, dir bool, value string) {
 	s.internalSet(nodePath, dir, value)
 }
 
-func (s *store) SetBulk(value map[string]string) {
+func (s *store) SetBulk(nodePath string, values map[string]string) {
 	s.worldLock.Lock()
 	defer s.worldLock.Unlock()
-	for k, v := range value {
-		s.internalSet(k, false, v)
+	s.internalSetBulk(nodePath, values)
+}
+
+func (s *store) internalSetBulk(nodePath string, values map[string]string) {
+	for k, v := range values {
+		key := util.AppendPathPrefix(k, nodePath)
+		s.internalSet(key, false, v)
 	}
+}
+
+func (s *store) Sets(nodePath string, values map[string]interface{}) {
+	nodePath = path.Clean(path.Join("/", nodePath))
+
+	s.worldLock.Lock()
+	defer s.worldLock.Unlock()
+	flatValues := flatmap.Flatten(values)
+	s.internalSetBulk(nodePath, flatValues)
 }
 
 // Delete deletes the node at the given path.

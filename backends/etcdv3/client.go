@@ -8,6 +8,7 @@ import (
 	"github.com/yunify/metadata-proxy/log"
 	"github.com/yunify/metadata-proxy/store"
 	"github.com/yunify/metadata-proxy/util"
+	"github.com/yunify/metadata-proxy/util/flatmap"
 	"golang.org/x/net/context"
 	"io/ioutil"
 	"reflect"
@@ -73,9 +74,13 @@ func NewEtcdClient(prefix string, machines []string, cert, key, caCert string, b
 	return &Client{c, prefix}, nil
 }
 
-// GetValues queries etcd for key Recursive:true.
-func (c *Client) GetValues(key string) (map[string]string, error) {
-	return c.internalGetValues(c.prefix, key)
+// GetValues queries etcd for key prefix.
+func (c *Client) GetValues(key string) (map[string]interface{}, error) {
+	m, err := c.internalGetValues(c.prefix, key)
+	if err != nil {
+		return nil, err
+	}
+	return flatmap.Expand(m, util.AppendPathPrefix(key, c.prefix)), nil
 }
 
 func (c *Client) internalGetValues(prefix, key string) (map[string]string, error) {
@@ -90,6 +95,23 @@ func (c *Client) internalGetValues(prefix, key string) (map[string]string, error
 		return vars, err
 	}
 	return vars, nil
+}
+
+// GetValue queries etcd for key
+func (c *Client) GetValue(key string) (string, error) {
+	return c.internalGetValue(c.prefix, key)
+}
+
+func (c *Client) internalGetValue(prefix, key string) (string, error) {
+	resp, err := c.client.Get(context.Background(), util.AppendPathPrefix(key, prefix))
+	if err != nil {
+		return "", err
+	}
+	if len(resp.Kvs) == 0 {
+		return "", nil
+	} else {
+		return string(resp.Kvs[0].Value), nil
+	}
 }
 
 // nodeWalk recursively descends nodes, updating vars.
@@ -124,29 +146,13 @@ func (c *Client) internalSync(prefix string, store store.Store, stopChan chan bo
 		}()
 
 		for !inited {
-			val, err := c.internalGetValues(prefix, "/")
+			val, err := c.GetValues("/")
 			if err != nil {
 				log.Error("GetValue from etcd key:%s, error-type: %s, error: %s", prefix, reflect.TypeOf(err), err.Error())
-				switch err {
-				case context.Canceled:
-					log.Fatal("ctx is canceled by another routine: %v", err)
-				case context.DeadlineExceeded:
-					log.Fatal("ctx is attached with a deadline is exceeded: %v", err)
-				//case rpctypes.ErrEmptyKey:
-				//	log.Fatal("client-side error: %v", err)
-				//	resp, createErr := c.client.Put(context.Background(), prefix, "")
-				//	if createErr != nil {
-				//		log.Error("Create dir %s error: %s", prefix, createErr.Error())
-				//	}else{
-				//		log.Info("Create dir %s resp: %v", prefix, resp)
-				//	}
-				default:
-					log.Fatal("bad cluster endpoints, which are not etcd servers: %v", err)
-				}
 				time.Sleep(time.Duration(1000) * time.Millisecond)
 				continue
 			}
-			store.SetBulk(val)
+			store.Sets("/", val)
 			inited = true
 		}
 		for resp := range watchChan {
@@ -178,30 +184,64 @@ func (c *Client) Sync(store store.Store, stopChan chan bool) {
 	go c.internalSync(c.prefix, store, stopChan)
 }
 
-func (c *Client) SetValues(values map[string]string) error {
-	return c.internalSetValue(c.prefix, values)
+func (c *Client) SetValues(key string, values map[string]interface{}, replace bool) error {
+	flatValues := flatmap.Flatten(values)
+	return c.internalSetValues(c.prefix, key, flatValues, replace)
 }
 
-func (c *Client) internalSetValue(prefix string, values map[string]string) error {
+func (c *Client) internalSetValues(prefix string, key string, values map[string]string, replace bool) error {
+	txn := c.client.Txn(context.TODO())
+
+	new_prefix := util.AppendPathPrefix(key, prefix)
+	ops := make([]client.Op, 0, len(values)+1)
+	if replace {
+		//delete and put can not in same txn.
+		c.internalDelete(prefix, key, true)
+	}
 	for k, v := range values {
-		k = util.AppendPathPrefix(k, prefix)
-		log.Debug("SetValue prefix:%s, key:%s, value:%s", prefix, k, v)
-		_, err := c.client.Put(context.Background(), k, v)
-		if err != nil {
-			return err
-		}
+		k = util.AppendPathPrefix(k, new_prefix)
+		ops = append(ops, client.OpPut(k, v))
+		log.Debug("SetValue prefix:%s, key:%s, value:%s", new_prefix, k, v)
+	}
+	txn.Then(ops...)
+	resp, err := txn.Commit()
+	log.Debug("SetValues err:%v, resp:%v", err, resp)
+	if err != nil {
+		return err
 	}
 	return nil
 }
 
-func (c *Client) Delete(key string) error {
-	return c.internalDelete(c.prefix, key)
+func (c *Client) SetValue(key string, value string) error {
+	return c.internalSetValue(c.prefix, key, value)
 }
 
-func (c *Client) internalDelete(prefix, key string) error {
+func (c *Client) internalSetValue(prefix string, key string, value string) error {
 	key = util.AppendPathPrefix(key, prefix)
-	log.Debug("Delete from backend, key:%s", key)
-	_, err := c.client.Delete(context.Background(), key, client.WithPrefix())
+	resp, err := c.client.Put(context.TODO(), key, value)
+	log.Debug("SetValue key: %s, value:%s, resp:%v", key, value, resp)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (c *Client) Delete(key string, dir bool) error {
+	return c.internalDelete(c.prefix, key, dir)
+}
+
+func (c *Client) internalDelete(prefix, key string, dir bool) error {
+	key = util.AppendPathPrefix(key, prefix)
+	log.Debug("Delete from backend, key:%s, dir:%v", key, dir)
+	var err error
+	if dir {
+		if key[len(key)-1] != '/' {
+			key = key + "/"
+		}
+		_, err = c.client.Delete(context.Background(), key, client.WithPrefix())
+	} else {
+		_, err = c.client.Delete(context.Background(), key)
+	}
 	return err
 }
 
@@ -209,19 +249,10 @@ func (c *Client) SyncSelfMapping(mapping store.Store, stopChan chan bool) {
 	go c.internalSync(SELF_MAPPING_PATH, mapping, stopChan)
 }
 
-func (c *Client) RegisterSelfMapping(clientIP string, mapping map[string]string) error {
-	prefix := util.AppendPathPrefix(clientIP, SELF_MAPPING_PATH)
-	oldMapping, _ := c.internalGetValues(prefix, "/")
-	if oldMapping != nil {
-		for k, _ := range oldMapping {
-			if _, ok := mapping[k]; !ok {
-				c.internalDelete("", k)
-			}
-		}
-	}
-	return c.internalSetValue(prefix, mapping)
+func (c *Client) RegisterSelfMapping(clientIP string, mapping map[string]string, replace bool) error {
+	return c.internalSetValues(SELF_MAPPING_PATH, clientIP, mapping, replace)
 }
 
 func (c *Client) UnregisterSelfMapping(clientIP string) error {
-	return c.internalDelete(SELF_MAPPING_PATH, clientIP)
+	return c.internalDelete(SELF_MAPPING_PATH, clientIP, true)
 }

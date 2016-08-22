@@ -6,6 +6,7 @@ import (
 	"github.com/yunify/metadata-proxy/backends"
 	"github.com/yunify/metadata-proxy/log"
 	"github.com/yunify/metadata-proxy/store"
+	"github.com/yunify/metadata-proxy/util/flatmap"
 	"math/rand"
 	"testing"
 	"time"
@@ -15,9 +16,15 @@ func init() {
 	log.SetLevel("debug")
 }
 
+var (
+	backendNodes = []string{
+		"etcd",
+		"etcdv3",
+	}
+)
+
 func TestMetarepo(t *testing.T) {
 
-	backendNodes := []string{"etcdv3", "etcd"}
 	prefix := fmt.Sprintf("/prefix%v", rand.Intn(1000))
 
 	for _, backend := range backendNodes {
@@ -30,10 +37,10 @@ func TestMetarepo(t *testing.T) {
 			Prefix:       prefix,
 		}
 		storeClient, err := backends.New(config)
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 
-		storeClient.Delete("/")
-		//assert.Nil(t, err)
+		storeClient.Delete("/", true)
+		//assert.NoError(t, err)
 
 		metarepo := New(false, storeClient)
 		metarepo.StartSync()
@@ -52,22 +59,24 @@ func TestMetarepo(t *testing.T) {
 		_, mok = mapVal["0"]
 		assert.True(t, mok)
 
-		storeClient.Delete("/0/0")
-		//TODO etcd current not support watch children delete. so try resync
+		storeClient.Delete("/0/0", false)
 
-		metarepo.ReSync()
-		time.Sleep(1000 * time.Millisecond)
+		if backend == "etcd" {
+			//TODO etcd v2 current not support watch children delete. so try resync
+
+			metarepo.ReSync()
+			time.Sleep(1000 * time.Millisecond)
+		}
 
 		_, ok = metarepo.Get("192.168.0.1", "/0/0")
 		assert.False(t, ok)
 
-		storeClient.Delete("/")
+		storeClient.Delete("/", true)
 	}
 }
 
 func TestMetarepoSelf(t *testing.T) {
 
-	backendNodes := []string{"etcdv3", "etcd"}
 	prefix := fmt.Sprintf("/prefix%v", rand.Intn(1000))
 
 	for _, backend := range backendNodes {
@@ -80,10 +89,10 @@ func TestMetarepoSelf(t *testing.T) {
 			Prefix:       prefix,
 		}
 		storeClient, err := backends.New(config)
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 
-		storeClient.Delete("/")
-		//assert.Nil(t, err)
+		storeClient.Delete("/", true)
+		//assert.NoError(t, err)
 
 		metarepo := New(false, storeClient)
 		metarepo.StartSync()
@@ -124,7 +133,7 @@ func TestMetarepoSelf(t *testing.T) {
 		assert.True(t, ok)
 		assert.Equal(t, fmt.Sprintf("%v-%v", p, p), val)
 
-		storeClient.Delete("/0/0")
+		storeClient.Delete("/0/0", false)
 
 		if backend == "etcd" {
 			//etcd v2 current not support watch children's children delete. so try resync
@@ -136,13 +145,12 @@ func TestMetarepoSelf(t *testing.T) {
 		assert.False(t, ok)
 		assert.Nil(t, val)
 
-		storeClient.Delete("/")
+		storeClient.Delete("/", true)
 	}
 }
 
 func TestMetarepoRoot(t *testing.T) {
 
-	backendNodes := []string{"etcdv3", "etcd"}
 	prefix := fmt.Sprintf("/prefix%v", rand.Intn(1000))
 
 	for _, backend := range backendNodes {
@@ -155,9 +163,9 @@ func TestMetarepoRoot(t *testing.T) {
 			Prefix:       prefix,
 		}
 		storeClient, err := backends.New(config)
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 
-		storeClient.Delete("/")
+		storeClient.Delete("/", true)
 
 		FillTestData(storeClient)
 
@@ -186,24 +194,24 @@ func TestMetarepoRoot(t *testing.T) {
 		assert.NotNil(t, selfVal)
 		assert.True(t, len(mapVal) == 1)
 
-		storeClient.Delete("/")
+		storeClient.Delete("/", true)
 	}
 }
 
 func FillTestData(storeClient backends.StoreClient) map[string]string {
-	testData := make(map[string]string)
+	testData := make(map[string]interface{})
 	for i := 0; i < 10; i++ {
+		ci := make(map[string]string)
 		for j := 0; j < 10; j++ {
-			key := fmt.Sprintf("/%v/%v", i, j)
-			val := fmt.Sprintf("%v-%v", i, j)
-			testData[key] = val
+			ci[fmt.Sprintf("%v", j)] = fmt.Sprintf("%v-%v", i, j)
 		}
+		testData[fmt.Sprintf("%v", i)] = ci
 	}
-	err := storeClient.SetValues(testData)
+	err := storeClient.SetValues("/", testData, true)
 	if err != nil {
 		log.Error("SetValues error", err.Error())
 	}
-	return testData
+	return flatmap.Flatten(testData)
 }
 
 func ValidTestData(t *testing.T, testData map[string]string, metastore store.Store) {

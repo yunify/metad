@@ -28,7 +28,7 @@ func TestConfigFile(t *testing.T) {
 	}
 
 	data, err := yaml.Marshal(config)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	configFile, fileErr := ioutil.TempFile("/tmp", "metadata-proxy")
 
 	fmt.Printf("configFile: %v \n", configFile.Name())

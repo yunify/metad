@@ -151,7 +151,7 @@ func (r *MetadataRepo) SelfMapping(clientIP string) (map[string]string, bool) {
 
 func (r *MetadataRepo) Register(clientIP string, mapping Mapping) {
 	log.Info("Register clientIP: %s, mapping: %v", clientIP, mapping)
-	r.storeClient.RegisterSelfMapping(clientIP, mapping)
+	r.storeClient.RegisterSelfMapping(clientIP, mapping, true)
 }
 
 func (r *MetadataRepo) Unregister(clientIP string) {
