@@ -7,6 +7,7 @@ import (
 	"github.com/yunify/metadata-proxy/store"
 	"net"
 	"path"
+	"reflect"
 	"strings"
 )
 
@@ -176,7 +177,7 @@ func checkMapping(data interface{}) error {
 		if strings.Index(k, "/") >= 0 {
 			return errors.New("mapping key should not be path.")
 		}
-		err := checkPath(v)
+		err := checkMappingPath(v)
 		if err != nil {
 			return err
 		}
@@ -184,7 +185,7 @@ func checkMapping(data interface{}) error {
 	return nil
 }
 
-func checkPath(v interface{}) error {
+func checkMappingPath(v interface{}) error {
 	vs, vok := v.(string)
 	if !vok {
 		return errors.New("mapping's value should be path .")
@@ -196,10 +197,11 @@ func checkPath(v interface{}) error {
 }
 
 func (r *MetadataRepo) UpdateMapping(nodePath string, data interface{}, replace bool) error {
-	nodePath = path.Clean(path.Join("/", nodePath))
+	nodePath = path.Join("/", nodePath)
 	if nodePath == "/" {
 		m, ok := data.(map[string]interface{})
 		if !ok {
+			log.Warning("Unexpect data type for mapping: %s", reflect.TypeOf(data))
 			return errors.New("mapping data should be json object.")
 		}
 		for k, v := range m {
@@ -214,21 +216,23 @@ func (r *MetadataRepo) UpdateMapping(nodePath string, data interface{}, replace 
 		}
 	} else {
 		parts := strings.Split(nodePath, "/")
-		// mapping only allow 2 level ip/key
-		if len(parts) > 2 {
+		// mapping only allow 2 level /ip/key split result  [,ip,key] len == 3
+		if len(parts) > 3 {
 			return errors.New("mapping path only support two level.")
 		}
-		ip := net.ParseIP(parts[0])
+		ip := net.ParseIP(parts[1])
 		if ip == nil {
 			return errors.New("mapping's first level key should be ip .")
 		}
-		if len(parts) == 1 {
+		// nodePath: /ip
+		if len(parts) == 2 {
 			err := checkMapping(data)
 			if err != nil {
 				return err
 			}
 		} else {
-			err := checkPath(data)
+			// nodePath: /ip/key
+			err := checkMappingPath(data)
 			if err != nil {
 				return err
 			}

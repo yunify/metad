@@ -13,6 +13,7 @@ import (
 	"io/ioutil"
 	"net"
 	"net/http"
+	"path"
 	"reflect"
 	"strings"
 	"time"
@@ -309,7 +310,8 @@ func (c *Client) UpdateMapping(key string, mapping interface{}, replace bool) er
 }
 
 func (c *Client) DeleteMapping(key string) error {
-	// mapping key path only two level $ip/$key
-	dir := len(strings.Split(key, "/")) <= 1
+	key = path.Join("/", key)
+	// mapping key path only two level /$ip/$key, split: [,ip,key]
+	dir := len(strings.Split(key, "/")) <= 2
 	return c.internalDelete(SELF_MAPPING_PATH, key, dir)
 }

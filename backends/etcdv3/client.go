@@ -12,6 +12,7 @@ import (
 	"github.com/yunify/metadata-proxy/util/flatmap"
 	"golang.org/x/net/context"
 	"io/ioutil"
+	"path"
 	"reflect"
 	"strings"
 	"time"
@@ -277,8 +278,8 @@ func (c *Client) Delete(key string, dir bool) error {
 }
 
 func (c *Client) internalDelete(prefix, key string, dir bool) error {
+	log.Debug("Delete from backend, prefix:%s, key:%s, dir:%v", prefix, key, dir)
 	key = util.AppendPathPrefix(key, prefix)
-	log.Debug("Delete from backend, key:%s, dir:%v", key, dir)
 	var err error
 	if dir {
 		if key[len(key)-1] != '/' {
@@ -301,7 +302,8 @@ func (c *Client) UpdateMapping(key string, mapping interface{}, replace bool) er
 }
 
 func (c *Client) DeleteMapping(key string) error {
-	// mapping key path only two level $ip/$key
-	dir := len(strings.Split(key, "/")) <= 1
+	key = path.Join("/", key)
+	// mapping key path only two level /$ip/$key, split: [,ip,key]
+	dir := len(strings.Split(key, "/")) <= 2
 	return c.internalDelete(SELF_MAPPING_PATH, key, dir)
 }

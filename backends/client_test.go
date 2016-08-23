@@ -21,6 +21,7 @@ var (
 
 func init() {
 	log.SetLevel("debug")
+	rand.Seed(int64(time.Now().Nanosecond()))
 }
 
 func TestClientGetSet(t *testing.T) {
@@ -202,6 +203,10 @@ func TestClientSet(t *testing.T) {
 
 		assert.NoError(t, storeClient.Delete("/", true))
 	}
+}
+
+func TestClientSetMaxOps(t *testing.T) {
+	//TODO for etcd3 batch update max ops
 }
 
 func TestClientSync(t *testing.T) {

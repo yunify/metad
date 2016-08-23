@@ -138,10 +138,16 @@ func watchManage() {
 
 	v1 := manageRouter.PathPrefix("/v1").Subrouter()
 	v1.HandleFunc("/resync", httpResync).Methods("POST")
-	v1.HandleFunc("/mapping", mappingGET).Methods("GET")
+
+	v1.HandleFunc("/mapping", mappingGet).Methods("GET")
+	v1.HandleFunc("/mapping", mappingUpdate).Methods("POST", "PUT")
+	v1.HandleFunc("/mapping", mappingDelete).Methods("DELETE")
+
 	mapping := v1.PathPrefix("/mapping").Subrouter()
 	//mapping.HandleFunc("", mappingGET).Methods("GET")
-	mapping.HandleFunc("/{nodePath:.*}", mappingGET).Methods("GET")
+	mapping.HandleFunc("/{nodePath:.*}", mappingGet).Methods("GET")
+	mapping.HandleFunc("/{nodePath:.*}", mappingUpdate).Methods("POST", "PUT")
+	mapping.HandleFunc("/{nodePath:.*}", mappingDelete).Methods("DELETE")
 
 	log.Info("Listening for Manage on %s", config.ListenManage)
 	go http.ListenAndServe(config.ListenManage, manageRouter)
@@ -168,15 +174,63 @@ func getNodePath(requestURI string) string {
 	return nodePath
 }
 
-func mappingGET(w http.ResponseWriter, req *http.Request) {
-	nodePath := getNodePath(req.URL.EscapedPath())
+func mappingGet(w http.ResponseWriter, req *http.Request) {
+	vars := mux.Vars(req)
+	nodePath := vars["nodePath"]
+	if nodePath == "" {
+		nodePath = "/"
+	}
 	val, ok := metadataRepo.GetMapping(nodePath)
 	if !ok {
-		log.Warning("mappingGET %s not found", nodePath)
+		log.Warning("mappingGet %s not found", nodePath)
 		respondError(w, req, "Not found", http.StatusNotFound)
 	} else {
-		log.Info("mappingGET %s OK", nodePath)
+		log.Info("mappingGet %s OK", nodePath)
 		respondSuccess(w, req, val)
+	}
+}
+
+func mappingUpdate(w http.ResponseWriter, req *http.Request) {
+	vars := mux.Vars(req)
+	nodePath := vars["nodePath"]
+	if nodePath == "" {
+		nodePath = "/"
+	}
+	decoder := json.NewDecoder(req.Body)
+	var data interface{}
+	err := decoder.Decode(&data)
+	if err != nil {
+		respondError(w, req, fmt.Sprintf("invalid json format, error:%s", err.Error()), 400)
+	} else {
+		// POST means replace old value
+		// PUT means merge to old value
+		replace := "POST" == strings.ToUpper(req.Method)
+		err = metadataRepo.UpdateMapping(nodePath, data, replace)
+		if err != nil {
+			msg := fmt.Sprintf("Update mapping error:%s", err.Error())
+			log.Error("mappingUpdate  nodePath:%s, data:%v, error:%s", nodePath, data, err.Error())
+			respondError(w, req, msg, http.StatusInternalServerError)
+		} else {
+			log.Info("mappingUpdate %s OK", nodePath)
+			respondSuccessDefault(w, req)
+		}
+	}
+}
+
+func mappingDelete(w http.ResponseWriter, req *http.Request) {
+	vars := mux.Vars(req)
+	nodePath := vars["nodePath"]
+	if nodePath == "" {
+		nodePath = "/"
+	}
+	err := metadataRepo.DeleteMapping(nodePath)
+	if err != nil {
+		msg := fmt.Sprintf("Update mapping error:%s", err.Error())
+		log.Error("mappingDelete  nodePath:%s, error:%s", nodePath, err.Error())
+		respondError(w, req, msg, http.StatusInternalServerError)
+	} else {
+		log.Info("mappingDelete %s OK", nodePath)
+		respondSuccessDefault(w, req)
 	}
 }
 
@@ -269,7 +323,7 @@ func selfHandler(w http.ResponseWriter, req *http.Request) {
 func respondError(w http.ResponseWriter, req *http.Request, msg string, statusCode int) {
 	obj := make(map[string]interface{})
 	obj["message"] = msg
-	obj["type"] = "error"
+	obj["type"] = "ERROR"
 	obj["code"] = statusCode
 
 	switch contentType(req) {
@@ -289,6 +343,20 @@ func respondError(w http.ResponseWriter, req *http.Request, msg string, statusCo
 		} else {
 			http.Error(w, "type: \"error\"\nmessage: \"JSON marshal error\"", http.StatusInternalServerError)
 		}
+	}
+}
+
+func respondSuccessDefault(w http.ResponseWriter, req *http.Request) {
+	obj := make(map[string]interface{})
+	obj["type"] = "OK"
+	obj["code"] = 200
+	switch contentType(req) {
+	case ContentText:
+		respondText(w, req, "OK")
+	case ContentJSON:
+		respondJSON(w, req, obj)
+	case ContentYAML:
+		respondYAML(w, req, obj)
 	}
 }
 

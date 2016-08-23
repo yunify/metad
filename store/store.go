@@ -97,8 +97,12 @@ func (s *store) Delete(nodePath string) {
 	if n == nil { // if the node does not exist, treat as success
 		return
 	}
-
+	parent := n.Parent
 	n.Remove(nil)
+	// if children is empty, also delete parent.
+	if len(parent.Children) == 0 {
+		parent.Remove(nil)
+	}
 }
 
 // walk walks all the nodePath and apply the walkFunc on each directory
