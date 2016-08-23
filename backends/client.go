@@ -17,12 +17,13 @@ type StoreClient interface {
 	Sync(store store.Store, stopChan chan bool)
 	SetValues(key string, values map[string]interface{}, replace bool) error
 	SetValue(key string, value string) error
+	Set(key string, value interface{}, replace bool) error
 	// Delete
 	// if the 'key' represent a dir, 'dir' should be true.
 	Delete(key string, dir bool) error
-	SyncSelfMapping(mapping store.Store, stopChan chan bool)
-	RegisterSelfMapping(clientIP string, mapping map[string]string, replace bool) error
-	UnregisterSelfMapping(clientIP string) error
+	SyncMapping(mapping store.Store, stopChan chan bool)
+	UpdateMapping(key string, mapping interface{}, replace bool) error
+	DeleteMapping(key string) error
 }
 
 // New is used to create a storage client based on our configuration.

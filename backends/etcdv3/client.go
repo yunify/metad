@@ -3,6 +3,7 @@ package etcdv3
 import (
 	"crypto/tls"
 	"crypto/x509"
+	"fmt"
 	client "github.com/coreos/etcd/clientv3"
 	"github.com/coreos/etcd/mvcc/mvccpb"
 	"github.com/yunify/metadata-proxy/log"
@@ -12,10 +13,16 @@ import (
 	"golang.org/x/net/context"
 	"io/ioutil"
 	"reflect"
+	"strings"
 	"time"
 )
 
 const SELF_MAPPING_PATH = "/_metadata-proxy/mapping"
+
+var (
+	//see github.com/coreos/etcd/etcdserver/api/v3rpc/key.go
+	MaxOpsPerTxn = 128
+)
 
 // Client is a wrapper around the etcd client
 type Client struct {
@@ -80,7 +87,7 @@ func (c *Client) GetValues(key string) (map[string]interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
-	return flatmap.Expand(m, util.AppendPathPrefix(key, c.prefix)), nil
+	return flatmap.Expand(m, key), nil
 }
 
 func (c *Client) internalGetValues(prefix, key string) (map[string]string, error) {
@@ -92,8 +99,9 @@ func (c *Client) internalGetValues(prefix, key string) (map[string]string, error
 
 	err = handleGetResp(prefix, resp, vars)
 	if err != nil {
-		return vars, err
+		return nil, err
 	}
+	log.Debug("GetValues prefix:%s, key:%s, resp:%v", prefix, key, vars)
 	return vars, nil
 }
 
@@ -119,7 +127,7 @@ func handleGetResp(prefix string, resp *client.GetResponse, vars map[string]stri
 	if resp != nil {
 		kvs := resp.Kvs
 		for _, kv := range kvs {
-			vars[string(kv.Key)] = string(kv.Value)
+			vars[util.TrimPathPrefix(string(kv.Key), prefix)] = string(kv.Value)
 		}
 		//TODO handle resp.More
 	}
@@ -155,13 +163,13 @@ func (c *Client) internalSync(prefix string, store store.Store, stopChan chan bo
 		}()
 
 		for !inited {
-			val, err := c.GetValues("/")
+			val, err := c.internalGetValues(prefix, "/")
 			if err != nil {
 				log.Error("GetValue from etcd key:%s, error-type: %s, error: %s", prefix, reflect.TypeOf(err), err.Error())
 				time.Sleep(time.Duration(1000) * time.Millisecond)
 				continue
 			}
-			store.Sets("/", val)
+			store.SetBulk("/", val)
 			inited = true
 		}
 		for resp := range watchChan {
@@ -193,13 +201,30 @@ func (c *Client) Sync(store store.Store, stopChan chan bool) {
 	go c.internalSync(c.prefix, store, stopChan)
 }
 
+func (c *Client) Set(key string, value interface{}, replace bool) error {
+	return c.internalSet(c.prefix, key, value, replace)
+}
+
+func (c *Client) internalSet(prefix, key string, value interface{}, replace bool) error {
+	switch t := value.(type) {
+	case map[string]interface{}, map[string]string, []interface{}:
+		flatValues := flatmap.Flatten(t)
+		return c.internalSetValues(prefix, key, flatValues, replace)
+	case string:
+		return c.internalSetValue(prefix, key, t)
+	default:
+		log.Warning("Set unexpect value type: %s", reflect.TypeOf(value))
+		val := fmt.Sprintf("%v", t)
+		return c.internalSetValue(prefix, key, val)
+	}
+}
+
 func (c *Client) SetValues(key string, values map[string]interface{}, replace bool) error {
 	flatValues := flatmap.Flatten(values)
 	return c.internalSetValues(c.prefix, key, flatValues, replace)
 }
 
 func (c *Client) internalSetValues(prefix string, key string, values map[string]string, replace bool) error {
-	txn := c.client.Txn(context.TODO())
 
 	new_prefix := util.AppendPathPrefix(key, prefix)
 	ops := make([]client.Op, 0, len(values)+1)
@@ -212,12 +237,24 @@ func (c *Client) internalSetValues(prefix string, key string, values map[string]
 		ops = append(ops, client.OpPut(k, v))
 		log.Debug("SetValue prefix:%s, key:%s, value:%s", new_prefix, k, v)
 	}
-	txn.Then(ops...)
-	resp, err := txn.Commit()
-	log.Debug("SetValues err:%v, resp:%v", err, resp)
-	if err != nil {
-		return err
+	for ok := true; ok; {
+		var commitOps []client.Op
+		if len(ops) > MaxOpsPerTxn {
+			commitOps = ops[:MaxOpsPerTxn]
+			ops = ops[MaxOpsPerTxn:]
+		} else {
+			commitOps = ops
+			ok = false
+		}
+		txn := c.client.Txn(context.TODO())
+		txn.Then(commitOps...)
+		resp, err := txn.Commit()
+		log.Debug("SetValues err:%v, resp:%v", err, resp)
+		if err != nil {
+			return err
+		}
 	}
+
 	return nil
 }
 
@@ -254,14 +291,17 @@ func (c *Client) internalDelete(prefix, key string, dir bool) error {
 	return err
 }
 
-func (c *Client) SyncSelfMapping(mapping store.Store, stopChan chan bool) {
+func (c *Client) SyncMapping(mapping store.Store, stopChan chan bool) {
 	go c.internalSync(SELF_MAPPING_PATH, mapping, stopChan)
 }
 
-func (c *Client) RegisterSelfMapping(clientIP string, mapping map[string]string, replace bool) error {
-	return c.internalSetValues(SELF_MAPPING_PATH, clientIP, mapping, replace)
+func (c *Client) UpdateMapping(key string, mapping interface{}, replace bool) error {
+	log.Debug("UpdateMapping key:%s, mapping:%v, replace:%v", key, mapping, replace)
+	return c.internalSet(SELF_MAPPING_PATH, key, mapping, replace)
 }
 
-func (c *Client) UnregisterSelfMapping(clientIP string) error {
-	return c.internalDelete(SELF_MAPPING_PATH, clientIP, true)
+func (c *Client) DeleteMapping(key string) error {
+	// mapping key path only two level $ip/$key
+	dir := len(strings.Split(key, "/")) <= 1
+	return c.internalDelete(SELF_MAPPING_PATH, key, dir)
 }

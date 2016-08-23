@@ -3,6 +3,7 @@ package etcd
 import (
 	"crypto/tls"
 	"crypto/x509"
+	"fmt"
 	"github.com/coreos/etcd/client"
 	"github.com/yunify/metadata-proxy/log"
 	"github.com/yunify/metadata-proxy/store"
@@ -13,6 +14,7 @@ import (
 	"net"
 	"net/http"
 	"reflect"
+	"strings"
 	"time"
 )
 
@@ -92,7 +94,7 @@ func (c *Client) GetValues(key string) (map[string]interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
-	return flatmap.Expand(m, util.AppendPathPrefix(key, c.prefix)), nil
+	return flatmap.Expand(m, key), nil
 }
 
 func (c *Client) internalGetValues(prefix, key string) (map[string]string, error) {
@@ -114,7 +116,7 @@ func (c *Client) internalGetValues(prefix, key string) (map[string]string, error
 		}
 		return nil, err
 	}
-	err = nodeWalk(resp.Node, vars)
+	err = nodeWalk(prefix, resp.Node, vars)
 	if err != nil {
 		return nil, err
 	}
@@ -123,15 +125,15 @@ func (c *Client) internalGetValues(prefix, key string) (map[string]string, error
 }
 
 // nodeWalk recursively descends nodes, updating vars.
-func nodeWalk(node *client.Node, vars map[string]string) error {
+func nodeWalk(prefix string, node *client.Node, vars map[string]string) error {
 	if node != nil {
 		key := node.Key
 		if !node.Dir {
-			//key = util.TrimPathPrefix(key, prefix)
+			key = util.TrimPathPrefix(key, prefix)
 			vars[key] = node.Value
 		} else {
 			for _, node := range node.Nodes {
-				nodeWalk(node, vars)
+				nodeWalk(prefix, node, vars)
 			}
 		}
 	}
@@ -186,7 +188,7 @@ func (c *Client) internalSync(prefix string, store store.Store, stopChan chan bo
 		}()
 
 		for !inited {
-			val, err := c.GetValues("/")
+			val, err := c.internalGetValues(prefix, "/")
 			if err != nil {
 				log.Error("GetValue from etcd key:%s, error-type: %s, error: %s", prefix, reflect.TypeOf(err), err.Error())
 				switch e := err.(type) {
@@ -206,7 +208,7 @@ func (c *Client) internalSync(prefix string, store store.Store, stopChan chan bo
 				time.Sleep(time.Duration(1000) * time.Millisecond)
 				continue
 			}
-			store.Sets("/", val)
+			store.SetBulk("/", val)
 			inited = true
 		}
 
@@ -235,6 +237,21 @@ func processSyncChange(prefix string, store store.Store, resp *client.Response) 
 
 func (c *Client) Sync(store store.Store, stopChan chan bool) {
 	go c.internalSync(c.prefix, store, stopChan)
+}
+
+func (c *Client) Set(key string, value interface{}, replace bool) error {
+	return c.internalSet(c.prefix, key, value, replace)
+}
+
+func (c *Client) internalSet(prefix, key string, value interface{}, replace bool) error {
+	switch t := value.(type) {
+	case map[string]interface{}, map[string]string, []interface{}:
+		flatValues := flatmap.Flatten(t)
+		return c.internalSetValues(prefix, key, flatValues, replace)
+	default:
+		val := fmt.Sprintf("%v", t)
+		return c.internalSetValue(prefix, key, val)
+	}
 }
 
 func (c *Client) SetValues(key string, values map[string]interface{}, replace bool) error {
@@ -283,14 +300,16 @@ func (c *Client) internalDelete(prefix, key string, dir bool) error {
 	return err
 }
 
-func (c *Client) SyncSelfMapping(mapping store.Store, stopChan chan bool) {
+func (c *Client) SyncMapping(mapping store.Store, stopChan chan bool) {
 	go c.internalSync(SELF_MAPPING_PATH, mapping, stopChan)
 }
 
-func (c *Client) RegisterSelfMapping(clientIP string, mapping map[string]string, replace bool) error {
-	return c.internalSetValues(SELF_MAPPING_PATH, clientIP, mapping, replace)
+func (c *Client) UpdateMapping(key string, mapping interface{}, replace bool) error {
+	return c.internalSet(SELF_MAPPING_PATH, key, mapping, replace)
 }
 
-func (c *Client) UnregisterSelfMapping(clientIP string) error {
-	return c.internalDelete(SELF_MAPPING_PATH, clientIP, true)
+func (c *Client) DeleteMapping(key string) error {
+	// mapping key path only two level $ip/$key
+	dir := len(strings.Split(key, "/")) <= 1
+	return c.internalDelete(SELF_MAPPING_PATH, key, dir)
 }

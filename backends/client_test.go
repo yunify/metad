@@ -1,6 +1,7 @@
 package backends
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/stretchr/testify/assert"
 	"github.com/yunify/metadata-proxy/log"
@@ -124,6 +125,85 @@ func TestClientGetsSets(t *testing.T) {
 	}
 }
 
+func TestClientSet(t *testing.T) {
+	for _, backend := range backendNodes {
+		println("Test backend: ", backend)
+
+		prefix := fmt.Sprintf("/prefix%v", rand.Intn(1000))
+
+		nodes := GetDefaultBackends(backend)
+
+		config := Config{
+			Backend:      backend,
+			BackendNodes: nodes,
+			Prefix:       prefix,
+		}
+		storeClient, err := New(config)
+		assert.NoError(t, err)
+
+		storeClient.Delete("/", true)
+
+		jsonVal := []byte(`
+			{"subkey1":
+				{
+					"subkey1sub1":"subsubvalue1",
+					"subkey1sub2": "subsubvalue2"
+				}
+			}
+		`)
+		var values interface{}
+		err = json.Unmarshal(jsonVal, &values)
+		assert.NoError(t, err)
+
+		err = storeClient.Set("testkey", values, true)
+		assert.NoError(t, err)
+
+		val, getErr := storeClient.GetValues("testkey")
+		assert.NoError(t, getErr)
+		assert.Equal(t, values, val)
+
+		//test update
+
+		jsonVal2 := []byte(`
+			{"subkey1":
+				{
+					"subkey1sub3":"subsubvalue3"
+				}
+			}
+		`)
+
+		var values2 interface{}
+		err = json.Unmarshal(jsonVal2, &values2)
+		assert.NoError(t, err)
+
+		err = storeClient.Set("testkey", values2, false)
+		assert.NoError(t, err)
+
+		values3 := map[string]interface{}{
+			"subkey1": map[string]interface{}{
+				"subkey1sub1": "subsubvalue1",
+				"subkey1sub2": "subsubvalue2",
+				"subkey1sub3": "subsubvalue3",
+			},
+		}
+
+		val, getErr = storeClient.GetValues("testkey")
+		assert.NoError(t, getErr)
+		assert.Equal(t, values3, val)
+
+		//test replace
+
+		err = storeClient.Set("testkey", values2, true)
+		assert.NoError(t, err)
+
+		val, getErr = storeClient.GetValues("testkey")
+		assert.NoError(t, getErr)
+		assert.Equal(t, values2, val)
+
+		assert.NoError(t, storeClient.Delete("/", true))
+	}
+}
+
 func TestClientSync(t *testing.T) {
 
 	for _, backend := range backendNodes {
@@ -172,7 +252,7 @@ func TestClientSync(t *testing.T) {
 	}
 }
 
-func TestSelfMapping(t *testing.T) {
+func TestMapping(t *testing.T) {
 
 	prefix := fmt.Sprintf("/prefix%v", rand.Intn(1000))
 
@@ -193,16 +273,21 @@ func TestSelfMapping(t *testing.T) {
 		assert.NoError(t, err)
 
 		metastore := store.New()
-		storeClient.SyncSelfMapping(metastore, stopChan)
+
+		//for test init sync.
 
 		for i := 0; i < 10; i++ {
 			ip := fmt.Sprintf("192.168.1.%v", i)
 			mapping := map[string]string{
 				"instance": fmt.Sprintf("/instances/%v", i),
+				"config":   fmt.Sprintf("/configs/%v", i),
 			}
-			storeClient.RegisterSelfMapping(ip, mapping, true)
+			storeClient.UpdateMapping(ip, mapping, true)
 		}
 		time.Sleep(1000 * time.Millisecond)
+		storeClient.SyncMapping(metastore, stopChan)
+		time.Sleep(1000 * time.Millisecond)
+
 		for i := 0; i < 10; i++ {
 			ip := fmt.Sprintf("192.168.1.%v", i)
 			val, ok := metastore.Get(ip)
@@ -212,6 +297,32 @@ func TestSelfMapping(t *testing.T) {
 			path := mapVal["instance"]
 			assert.Equal(t, path, fmt.Sprintf("/instances/%v", i))
 		}
+
+		for i := 10; i < 20; i++ {
+			ip := fmt.Sprintf("192.168.1.%v", i)
+			mapping := map[string]string{
+				"instance": fmt.Sprintf("/instances/%v", i),
+				"config":   fmt.Sprintf("/configs/%v", i),
+			}
+			storeClient.UpdateMapping(ip, mapping, true)
+		}
+		time.Sleep(1000 * time.Millisecond)
+		for i := 10; i < 20; i++ {
+			ip := fmt.Sprintf("192.168.1.%v", i)
+			val, ok := metastore.Get(ip)
+			assert.True(t, ok)
+			mapVal, mok := val.(map[string]interface{})
+			assert.True(t, mok)
+			path := mapVal["instance"]
+			assert.Equal(t, path, fmt.Sprintf("/instances/%v", i))
+		}
+		ip := fmt.Sprintf("192.168.1.%v", 1)
+		nodePath := ip + "/" + "instance"
+		storeClient.UpdateMapping(nodePath, "/instances/new1", true)
+		time.Sleep(1000 * time.Millisecond)
+		val, ok := metastore.Get(nodePath)
+		assert.True(t, ok)
+		assert.Equal(t, "/instances/new1", val)
 	}
 }
 
