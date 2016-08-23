@@ -29,6 +29,17 @@ $ ls bin/
 metadata-proxy
 ```
 
+## Manage API
+
+Manage API default port is 127.0.0.1:8112
+
+* /v1/mapping[/{nodePath}] manage metadata and ip mapping
+    * GET show mapping config.
+    * POST create or replace mapping config. 
+    * PUT create or merge update mapping config.
+    * DELETE delete mapping config.
+* /v1/resync resync metadata and mapping from backend. method: POST
+
 ## Getting Started
 
 * start etcd
@@ -55,7 +66,7 @@ export ETCDCTL_API=3
 for i in `seq 1 5`; 
 do  
     etcdctl put /nodes/$i/name node$i; 
-    etcdctl put /nodes/$i/ip 192.168.11.$i;
+    etcdctl put /nodes/$i/ip 192.168.1.$i;
 done
 ```
 
@@ -67,23 +78,23 @@ by etcdctl
 etcdctl get / --prefix
 
 /nodes/1/ip
-192.168.11.1
+192.168.1.1
 /nodes/1/name
 node1
 /nodes/2/ip
-192.168.11.2
+192.168.1.2
 /nodes/2/name
 node2
 /nodes/3/ip
-192.168.11.3
+192.168.1.3
 /nodes/3/name
 node3
 /nodes/4/ip
-192.168.11.4
+192.168.1.4
 /nodes/4/name
 node4
 /nodes/5/ip
-192.168.11.5
+192.168.1.5
 /nodes/5/name
 node5
 
@@ -106,23 +117,23 @@ curl -H "Accept: application/json" http://127.0.0.1:8080/
 {
     "nodes": {
         "1": {
-            "ip": "192.168.11.1",
+            "ip": "192.168.1.1",
             "name": "node1"
         },
         "2": {
-            "ip": "192.168.11.2",
+            "ip": "192.168.1.2",
             "name": "node2"
         },
         "3": {
-            "ip": "192.168.11.3",
+            "ip": "192.168.1.3",
             "name": "node3"
         },
         "4": {
-            "ip": "192.168.11.4",
+            "ip": "192.168.1.4",
             "name": "node4"
         },
         "5": {
-            "ip": "192.168.11.5",
+            "ip": "192.168.1.5",
             "name": "node5"
         }
     }
@@ -136,45 +147,94 @@ curl -H "Accept: application/yaml" http://127.0.0.1:8080/
 
 nodes:
   "1":
-    ip: 192.168.11.1
+    ip: 192.168.1.1
     name: node1
   "2":
-    ip: 192.168.11.2
+    ip: 192.168.1.2
     name: node2
   "3":
-    ip: 192.168.11.3
+    ip: 192.168.1.3
     name: node3
   "4":
-    ip: 192.168.11.4
+    ip: 192.168.1.4
     name: node4
   "5":
-    ip: 192.168.11.5
+    ip: 192.168.1.5
     name: node5
 ```
 
-register self mapping
+mapping create
 
 ```
-curl http://127.0.0.1:8112/v1/register -d 'ip=192.168.11.1&mapping={"node":"/nodes/1"}'
+
+curl -H "Content-Type: application/json" -X POST http://127.0.0.1:8112/v1/mapping -d '{"192.168.1.1":{"node":"/nodes/1"}}'
 
 OK
+```
+
+show mapping
+
+```
+
+curl -H "Accept: application/json" http://127.0.0.1:8112/v1/mapping
+
+{"192.168.1.1":{"node":"/nodes/1"}}
 ```
 
 self request
 
 ```
-curl -H "X-Forwarded-For: 192.168.11.1" http://127.0.0.1:8080/
+curl -H "X-Forwarded-For: 192.168.1.1" http://127.0.0.1:8080/
 
 nodes/
 self/
 
-curl -H "X-Forwarded-For: 192.168.11.1" http://127.0.0.1:8080/self/node
+url -H "Accept: application/json" -H "X-Forwarded-For: 192.168.1.1" http://127.0.0.1:8080/self/node
 
-ip
-name
 
-curl -H "X-Forwarded-For: 192.168.11.1" http://127.0.0.1:8080/self/node/ip
+{"ip":"192.168.1.1","name":"node1"}
 
-192.168.11.1
+```
 
+update mapping
+
+```
+curl -H "Content-Type: application/json" -X PUT http://127.0.0.1:8112/v1/mapping/192.168.1.1 -d '{"nodes":"/nodes"}'
+
+OK
+
+curl -H "Accept: application/json" http://127.0.0.1:8112/v1/mapping
+
+{"192.168.1.1":{"node":"/nodes/1","nodes":"/nodes"}}
+
+
+curl -H "Content-Type: application/json" -X PUT http://127.0.0.1:8112/v1/mapping/192.168.1.1/node2 -d '"/nodes/2"'
+
+OK
+
+
+curl -H "Accept: application/json" http://127.0.0.1:8112/v1/mapping
+
+{"192.168.1.1":{"node":"/nodes/1","node2":"/nodes/2","nodes":"/nodes"}}
+```
+
+delete mapping
+
+```
+curl -X DELETE http://127.0.0.1:8112/v1/mapping/192.168.1.1/node2
+
+OK
+
+curl -H "Accept: application/json" http://127.0.0.1:8112/v1/mapping
+
+{"192.168.1.1":{"node":"/nodes/1","nodes":"/nodes"}}
+
+
+curl -X DELETE http://127.0.0.1:8112/v1/mapping/192.168.1.1
+
+OK
+
+curl -H "Accept: application/json" http://127.0.0.1:8112/v1/mapping
+
+{}
 ```
