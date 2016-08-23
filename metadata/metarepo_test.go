@@ -14,6 +14,7 @@ import (
 
 func init() {
 	log.SetLevel("debug")
+	rand.Seed(int64(time.Now().Nanosecond()))
 }
 
 var (
@@ -76,7 +77,6 @@ func TestMetarepo(t *testing.T) {
 }
 
 func TestMetarepoSelf(t *testing.T) {
-
 	prefix := fmt.Sprintf("/prefix%v", rand.Intn(1000))
 
 	for _, backend := range backendNodes {
@@ -110,12 +110,12 @@ func TestMetarepoSelf(t *testing.T) {
 
 		_, mok = mapVal["0"]
 		assert.True(t, mok)
-
+		key := "node"
 		for i := 0; i < 10; i++ {
 			ip := fmt.Sprintf("192.168.1.%v", i)
 			mapping := map[string]string{}
-			key := fmt.Sprintf("s%v", i)
-			mapping[key] = fmt.Sprintf("/%v", i)
+			mapping[key] = fmt.Sprintf("/%v/%v", i, i)
+			mapping["nodes"] = fmt.Sprintf("/%v", i)
 			metarepo.Register(ip, mapping)
 		}
 		time.Sleep(2000 * time.Millisecond)
@@ -125,26 +125,25 @@ func TestMetarepoSelf(t *testing.T) {
 		val, ok = metarepo.GetSelf(ip, "/")
 		mapVal, mok = val.(map[string]interface{})
 
-		key := fmt.Sprintf("s%v", p)
 		assert.True(t, mok)
 		assert.NotNil(t, mapVal[key])
 
-		val, ok = metarepo.GetSelf(ip, fmt.Sprintf("/s%v/%v/%v", p, p, p))
+		val, ok = metarepo.GetSelf(ip, fmt.Sprintf("/nodes/%v", p))
 		assert.True(t, ok)
-		assert.Equal(t, fmt.Sprintf("%v-%v-%v", p, p, p), val)
+		assert.Equal(t, fmt.Sprintf("%v-%v", p, p), val)
 
-		storeClient.Delete("/0/0/0", false)
+		storeClient.Delete("/0/0", false)
 
 		if backend == "etcd" {
 			//etcd v2 current not support watch children's children delete. so try resync
 			metarepo.ReSync()
 		}
 		time.Sleep(1000 * time.Millisecond)
-		val, ok = metarepo.GetSelf("192.168.1.0", "/s0/0/0")
+		val, ok = metarepo.GetSelf("192.168.1.0", "/node/0")
 		assert.False(t, ok)
 		assert.Nil(t, val)
 
-		//storeClient.Delete("/", true)
+		storeClient.Delete("/", true)
 	}
 }
 
@@ -202,11 +201,12 @@ func FillTestData(storeClient backends.StoreClient) map[string]string {
 	for i := 0; i < 10; i++ {
 		ci := make(map[string]interface{})
 		for j := 0; j < 10; j++ {
-			cj := make(map[string]string)
-			for k := 0; k < 10; k++ {
-				cj[fmt.Sprintf("%v", k)] = fmt.Sprintf("%v-%v-%v", i, j, k)
-			}
-			ci[fmt.Sprintf("%v", j)] = cj
+			//cj := make(map[string]string)
+			//for k := 0; k < 10; k++ {
+			//	cj[fmt.Sprintf("%v", k)] = fmt.Sprintf("%v-%v-%v", i, j, k)
+			//}
+			//ci[fmt.Sprintf("%v", j)] = cj
+			ci[fmt.Sprintf("%v", j)] = fmt.Sprintf("%v-%v", i, j)
 		}
 		testData[fmt.Sprintf("%v", i)] = ci
 	}
