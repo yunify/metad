@@ -5,7 +5,9 @@ package flatmap
 // The different is this flatmap's path separator is '/', not '.', and with a different approach to process slice.
 
 import (
+	"errors"
 	"fmt"
+	"github.com/yunify/metadata-proxy/log"
 	"reflect"
 )
 
@@ -18,11 +20,37 @@ import (
 //
 //
 // See the tests for examples of what inputs are turned into.
-func Flatten(thing map[string]interface{}) map[string]string {
+func Flatten(thing interface{}) map[string]string {
+	result := make(map[string]string)
+	switch t := thing.(type) {
+	case map[string]interface{}:
+		for k, raw := range t {
+			flatten(result, k, reflect.ValueOf(raw))
+		}
+	case map[string]string:
+		for k, raw := range t {
+			flatten(result, k, reflect.ValueOf(raw))
+		}
+	case map[interface{}]interface{}:
+		for k, raw := range t {
+			flatten(result, fmt.Sprintf("%v", k), reflect.ValueOf(raw))
+		}
+	case []interface{}:
+		for i, raw := range t {
+			flatten(result, fmt.Sprintf("/%v", i), reflect.ValueOf(raw))
+		}
+	default:
+		panic(errors.New(fmt.Sprintf("Unsupport type %v", t)))
+	}
+
+	return result
+}
+
+func FlattenSlice(thing []interface{}) map[string]string {
 	result := make(map[string]string)
 
-	for k, raw := range thing {
-		flatten(result, k, reflect.ValueOf(raw))
+	for i, raw := range thing {
+		flatten(result, fmt.Sprintf("/%v", i), reflect.ValueOf(raw))
 	}
 
 	return result
@@ -35,23 +63,39 @@ func flatten(result map[string]string, prefix string, v reflect.Value) {
 	if prefix[0] != '/' {
 		prefix = "/" + prefix
 	}
-	switch v.Kind() {
-	case reflect.Bool:
-		if v.Bool() {
-			result[prefix] = "true"
-		} else {
-			result[prefix] = "false"
+	if !v.IsValid() {
+		result[prefix] = ""
+	} else {
+		switch v.Kind() {
+		case reflect.Bool:
+			if v.Bool() {
+				result[prefix] = "true"
+			} else {
+				result[prefix] = "false"
+			}
+		case reflect.Int:
+			result[prefix] = fmt.Sprintf("%v", v.Int())
+		case reflect.Float64:
+			result[prefix] = fmt.Sprintf("%v", v.Float())
+		case reflect.Float32:
+			result[prefix] = fmt.Sprintf("%v", v.Float())
+		case reflect.Map:
+			flattenMap(result, prefix, v)
+		case reflect.Slice:
+			flattenSlice(result, prefix, v)
+		case reflect.String:
+			result[prefix] = v.String()
+		case reflect.Ptr:
+			if v.IsNil() {
+				result[prefix] = ""
+			} else {
+				log.Warning("Unknow type: %v", v.Type())
+				result[prefix] = fmt.Sprintf("%v", v.Interface())
+			}
+		default:
+			log.Warning("Unknow type: %v", v.Type())
+			result[prefix] = fmt.Sprintf("%v", v.Interface())
 		}
-	case reflect.Int:
-		result[prefix] = fmt.Sprintf("%d", v.Int())
-	case reflect.Map:
-		flattenMap(result, prefix, v)
-	case reflect.Slice:
-		flattenSlice(result, prefix, v)
-	case reflect.String:
-		result[prefix] = v.String()
-	default:
-		panic(fmt.Sprintf("Unknown: %s", v))
 	}
 }
 
@@ -60,12 +104,14 @@ func flattenMap(result map[string]string, prefix string, v reflect.Value) {
 		if k.Kind() == reflect.Interface {
 			k = k.Elem()
 		}
-
+		var key string
 		if k.Kind() != reflect.String {
-			panic(fmt.Sprintf("%s: map key is not string: %s", prefix, k))
+			key = fmt.Sprintf("%v", k)
+		} else {
+			key = k.String()
 		}
 
-		flatten(result, fmt.Sprintf("%s/%s", prefix, k.String()), v.MapIndex(k))
+		flatten(result, fmt.Sprintf("%s/%s", prefix, key), v.MapIndex(k))
 	}
 }
 

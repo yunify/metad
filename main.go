@@ -132,9 +132,16 @@ func resync() error {
 func watchManage() {
 	manageRouter := mux.NewRouter()
 	manageRouter.HandleFunc("/favicon.ico", http.NotFound)
-	manageRouter.HandleFunc("/v1/resync", httpResync).Methods("POST")
+	//manageRouter.HandleFunc("/v1/resync", httpResync).Methods("POST")
 	manageRouter.HandleFunc("/v1/register", httpRegister).Methods("POST")
 	manageRouter.HandleFunc("/v1/unregister", httpUnregister).Methods("POST")
+
+	v1 := manageRouter.PathPrefix("/v1").Subrouter()
+	v1.HandleFunc("/resync", httpResync).Methods("POST")
+	v1.HandleFunc("/mapping", mappingGET).Methods("GET")
+	mapping := v1.PathPrefix("/mapping").Subrouter()
+	//mapping.HandleFunc("", mappingGET).Methods("GET")
+	mapping.HandleFunc("/{nodePath:.*}", mappingGET).Methods("GET")
 
 	log.Info("Listening for Manage on %s", config.ListenManage)
 	go http.ListenAndServe(config.ListenManage, manageRouter)
@@ -154,10 +161,44 @@ func httpResync(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
+func getNodePath(requestURI string) string {
+	//trim the v1 and router path
+	parts := strings.Split(requestURI, "/")
+	nodePath := "/" + strings.Join(parts[3:], "/")
+	return nodePath
+}
+
+func mappingGET(w http.ResponseWriter, req *http.Request) {
+	nodePath := getNodePath(req.URL.EscapedPath())
+	val, ok := metadataRepo.GetMapping(nodePath)
+	if !ok {
+		log.Warning("mappingGET %s not found", nodePath)
+		respondError(w, req, "Not found", http.StatusNotFound)
+	} else {
+		log.Info("mappingGET %s OK", nodePath)
+		respondSuccess(w, req, val)
+	}
+}
+
+func httpMapping(w http.ResponseWriter, req *http.Request) {
+	log.Debug("Received HTTP mapping request")
+	ip := req.FormValue("ip")
+	mapping := make(map[string]string)
+	mapppingstr := req.FormValue("mapping")
+	err := json.Unmarshal([]byte(mapppingstr), &mapping)
+	metadataRepo.Register(ip, mapping)
+	if err == nil {
+		io.WriteString(w, "OK")
+	} else {
+		w.WriteHeader(500)
+		io.WriteString(w, err.Error())
+	}
+}
+
 func httpRegister(w http.ResponseWriter, req *http.Request) {
 	log.Debug("Received HTTP register request")
 	ip := req.FormValue("ip")
-	mapping := make(metadata.Mapping)
+	mapping := make(map[string]string)
 	mapppingstr := req.FormValue("mapping")
 	err := json.Unmarshal([]byte(mapppingstr), &mapping)
 	metadataRepo.Register(ip, mapping)

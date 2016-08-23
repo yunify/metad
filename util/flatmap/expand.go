@@ -1,6 +1,8 @@
 package flatmap
 
 import (
+	"github.com/yunify/metadata-proxy/log"
+	"path"
 	"strings"
 )
 
@@ -8,13 +10,13 @@ import (
 // a more complex structure. This is the reverse of the Flatten operation
 // but if origin map include slice, Expand(Flatten(map)) will lose the slice info, slice will treat as map with number key.
 func Expand(m map[string]string, prefix string) map[string]interface{} {
-	if prefix == "" {
-		prefix = "/"
-	}
+	prefix = path.Clean(path.Join("/", prefix))
 	if prefix[len(prefix)-1] != '/' {
 		prefix = prefix + "/"
 	}
-	return expandMap(m, prefix)
+	result := expandMap(m, prefix)
+	log.Debug("Expand prefix:%s, map:%v, result:%v", prefix, m, result)
+	return result
 }
 
 func expand(m map[string]string, prefix string) interface{} {

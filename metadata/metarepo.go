@@ -1,20 +1,20 @@
 package metadata
 
 import (
+	"errors"
 	"github.com/yunify/metadata-proxy/backends"
 	"github.com/yunify/metadata-proxy/log"
 	"github.com/yunify/metadata-proxy/store"
+	"net"
 	"path"
 	"strings"
 )
 
-type Mapping map[string]string
-
 type MetadataRepo struct {
 	onlySelf        bool
-	selfMapping     store.Store
+	mapping         store.Store
 	storeClient     backends.StoreClient
-	metastore       store.Store
+	data            store.Store
 	metaStopChan    chan bool
 	mappingStopChan chan bool
 }
@@ -22,9 +22,9 @@ type MetadataRepo struct {
 func New(onlySelf bool, storeClient backends.StoreClient) *MetadataRepo {
 	metadataRepo := MetadataRepo{
 		onlySelf:        onlySelf,
-		selfMapping:     store.New(),
+		mapping:         store.New(),
 		storeClient:     storeClient,
-		metastore:       store.New(),
+		data:            store.New(),
 		metaStopChan:    make(chan bool),
 		mappingStopChan: make(chan bool),
 	}
@@ -42,19 +42,19 @@ func (r *MetadataRepo) StartSync() {
 }
 
 func (r *MetadataRepo) startMetaSync() {
-	r.storeClient.Sync(r.metastore, r.metaStopChan)
+	r.storeClient.Sync(r.data, r.metaStopChan)
 }
 
 func (r *MetadataRepo) startMappingSync() {
-	r.storeClient.SyncSelfMapping(r.selfMapping, r.mappingStopChan)
+	r.storeClient.SyncMapping(r.mapping, r.mappingStopChan)
 }
 
 func (r *MetadataRepo) ReSync() {
 	log.Info("ReSync")
 	//TODO lock
 	r.StopSync()
-	r.metastore.Delete("/")
-	r.selfMapping.Delete("/")
+	r.data.Delete("/")
+	r.mapping.Delete("/")
 	r.StartSync()
 }
 
@@ -80,7 +80,7 @@ func (r *MetadataRepo) Get(clientIP string, metapath string) (interface{}, bool)
 			return nil, false
 		}
 	} else {
-		val, ok := r.metastore.Get(metapath)
+		val, ok := r.data.Get(metapath)
 		if !ok {
 			return nil, false
 		} else {
@@ -110,7 +110,7 @@ func (r *MetadataRepo) GetSelf(clientIP string, metapath string) (interface{}, b
 		meta := make(map[string]interface{})
 		for k, v := range mapping {
 			subpath := path.Clean(path.Join("/", v))
-			val, getOK := r.metastore.Get(subpath)
+			val, getOK := r.data.Get(subpath)
 			if getOK {
 				meta[k] = val
 			} else {
@@ -119,12 +119,16 @@ func (r *MetadataRepo) GetSelf(clientIP string, metapath string) (interface{}, b
 		}
 		return meta, true
 	} else {
+		//for avoid to miss match /nodes and /node, so add "/" to end.
+		metapath = metapath + "/"
 		for k, v := range mapping {
-			keyPath := path.Clean(path.Join("/", k))
+			keyPath := path.Clean(path.Join("/", k)) + "/"
 			if strings.HasPrefix(metapath, keyPath) {
 				metapath = path.Clean(path.Join("/", strings.TrimPrefix(metapath, keyPath)))
 				nodePath := path.Clean(path.Join("/", v, metapath))
-				return r.metastore.Get(nodePath)
+				result, rok := r.data.Get(nodePath)
+				log.Debug("Self key:%s, nodePath:%s, ok:%v, result:%v", keyPath, nodePath, rok, result)
+				return result, rok
 			}
 		}
 		log.Warning("Can not get self metadata by clientIP: %s path: %s", clientIP, metapath)
@@ -133,7 +137,7 @@ func (r *MetadataRepo) GetSelf(clientIP string, metapath string) (interface{}, b
 }
 
 func (r *MetadataRepo) SelfMapping(clientIP string) (map[string]string, bool) {
-	mappingVal, ok := r.selfMapping.Get(clientIP)
+	mappingVal, ok := r.mapping.Get(clientIP)
 	if !ok {
 		return nil, false
 	}
@@ -149,12 +153,94 @@ func (r *MetadataRepo) SelfMapping(clientIP string) (map[string]string, bool) {
 	return mapping, true
 }
 
-func (r *MetadataRepo) Register(clientIP string, mapping Mapping) {
+func (r *MetadataRepo) Register(clientIP string, mapping map[string]string) {
 	log.Info("Register clientIP: %s, mapping: %v", clientIP, mapping)
-	r.storeClient.RegisterSelfMapping(clientIP, mapping, true)
+	r.storeClient.UpdateMapping(clientIP, mapping, true)
 }
 
 func (r *MetadataRepo) Unregister(clientIP string) {
-	r.storeClient.UnregisterSelfMapping(clientIP)
-	r.selfMapping.Delete(clientIP)
+	r.storeClient.DeleteMapping(clientIP)
+	r.mapping.Delete(clientIP)
+}
+
+func (r *MetadataRepo) UpdateData(nodePath string, data interface{}, replace bool) error {
+	return r.storeClient.Set(nodePath, data, replace)
+}
+
+func checkMapping(data interface{}) error {
+	m, ok := data.(map[string]interface{})
+	if !ok {
+		return errors.New("mapping data should be json object.")
+	}
+	for k, v := range m {
+		if strings.Index(k, "/") >= 0 {
+			return errors.New("mapping key should not be path.")
+		}
+		err := checkPath(v)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func checkPath(v interface{}) error {
+	vs, vok := v.(string)
+	if !vok {
+		return errors.New("mapping's value should be path .")
+	}
+	if vs == "" || vs[0] != '/' {
+		return errors.New("mapping's value should be path .")
+	}
+	return nil
+}
+
+func (r *MetadataRepo) UpdateMapping(nodePath string, data interface{}, replace bool) error {
+	nodePath = path.Clean(path.Join("/", nodePath))
+	if nodePath == "/" {
+		m, ok := data.(map[string]interface{})
+		if !ok {
+			return errors.New("mapping data should be json object.")
+		}
+		for k, v := range m {
+			ip := net.ParseIP(k)
+			if ip == nil {
+				return errors.New("mapping's first level key should be ip .")
+			}
+			err := checkMapping(v)
+			if err != nil {
+				return err
+			}
+		}
+	} else {
+		parts := strings.Split(nodePath, "/")
+		// mapping only allow 2 level ip/key
+		if len(parts) > 2 {
+			return errors.New("mapping path only support two level.")
+		}
+		ip := net.ParseIP(parts[0])
+		if ip == nil {
+			return errors.New("mapping's first level key should be ip .")
+		}
+		if len(parts) == 1 {
+			err := checkMapping(data)
+			if err != nil {
+				return err
+			}
+		} else {
+			err := checkPath(data)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return r.storeClient.UpdateMapping(nodePath, data, replace)
+}
+
+func (r *MetadataRepo) DeleteMapping(nodePath string) error {
+	return r.storeClient.DeleteMapping(nodePath)
+}
+
+func (r *MetadataRepo) GetMapping(nodePath string) (interface{}, bool) {
+	return r.mapping.Get(nodePath)
 }
