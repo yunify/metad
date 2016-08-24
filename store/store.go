@@ -42,7 +42,7 @@ func (s *store) Get(nodePath string) (interface{}, bool) {
 
 	n := s.internalGet(nodePath)
 	if n != nil {
-		return n.getValue(), true
+		return n.GetValue(), true
 	}
 
 	return nil, false
@@ -97,12 +97,7 @@ func (s *store) Delete(nodePath string) {
 	if n == nil { // if the node does not exist, treat as success
 		return
 	}
-	parent := n.Parent
 	n.Remove(nil)
-	// if children is empty, also delete parent.
-	if len(parent.Children) == 0 {
-		parent.Remove(nil)
-	}
 }
 
 // walk walks all the nodePath and apply the walkFunc on each directory
@@ -138,7 +133,7 @@ func (s *store) internalSet(nodePath string, dir bool, value string) *node {
 		if dir {
 			n.AsDir()
 		}
-		n.Value = value
+		n.value = value
 		return n
 	}
 
@@ -164,8 +159,8 @@ func (s *store) internalGet(nodePath string) *node {
 			return nil
 		}
 
-		child, ok := parent.Children[name]
-		if ok {
+		child := parent.GetChild(name)
+		if child != nil {
 			return child
 		}
 
@@ -181,13 +176,13 @@ func (s *store) internalGet(nodePath string) *node {
 // If it does not exist, this function will create a new directory and return the pointer to that node.
 // If it is a file, this function will return error.
 func (s *store) checkDir(parent *node, dirName string) *node {
-	node, ok := parent.Children[dirName]
+	node := parent.GetChild(dirName)
 
-	if ok {
+	if node != nil {
 		return node
 	}
 
-	n := newDir(s, path.Join(parent.Path, dirName), parent)
-	parent.Children[dirName] = n
+	n := newDir(s, path.Join(parent.path, dirName), parent)
+	parent.Add(n)
 	return n
 }

@@ -67,8 +67,6 @@ func TestStoreBulk(t *testing.T) {
 	val, ok := store.Get("/clusters/10")
 	assert.True(t, ok)
 
-	fmt.Printf("%v", val)
-
 	val, ok = store.Get("/clusters/1/ip")
 	assert.True(t, ok)
 	assert.Equal(t, "192.168.0.1", val)
@@ -90,16 +88,48 @@ func TestStoreSets(t *testing.T) {
 	val, ok := store.Get("/clusters/10")
 	assert.True(t, ok)
 
-	fmt.Printf("%v", val)
-
 	val, ok = store.Get("/clusters/1/ip")
 	assert.True(t, ok)
 	assert.Equal(t, "192.168.0.1", val)
 
 }
 
-func TestStoreSet(t *testing.T) {
+func TestStoreNodeToDirPanic(t *testing.T) {
 	store := New()
-	store.Set("/cl-fctugrij/cmd/i-tasp99rb/a/b/c/d/e/f/g/id", false, "iTQsRC5MqeBxaoUJSH3dMkf5e8OxMF8JxH1j")
-	store.Set("/cl-fctugrij/cmd/i-tasp99rb/a/b/c/d/e/f/g/id", false, "")
+	// first set a node value.
+	store.Set("/nodes/6", false, "node6")
+	// create pre node's child's child, will cause panic.
+	store.Set("/nodes/6/label/key1", false, "value1")
+
+	v, _ := store.Get("/nodes/6")
+	_, mok := v.(map[string]interface{})
+	assert.True(t, mok)
+
+	v, _ = store.Get("/nodes/6/label/key1")
+	assert.Equal(t, "value1", v)
+}
+
+func TestStoreRemoveEmptyParent(t *testing.T) {
+	store := New()
+
+	// if dir has children, dir's text value will be hidden.
+	store.Set("/nodes/6", false, "node6")
+	store.Set("/nodes/6/label/key1", false, "value1")
+
+	store.Delete("/nodes/6/label/key1")
+
+	v, ok := store.Get("/nodes/6/label")
+	assert.False(t, ok)
+
+	// if dir's children been deleted, and dir has text value ,dir will become a leaf node.
+	v, ok = store.Get("/nodes/6")
+	assert.True(t, ok)
+	assert.Equal(t, "node6", v)
+
+	// when delete leaf node, empty parent dir will been auto delete.
+	store.Set("/nodes/7/label/key1", false, "value1")
+	store.Delete("/nodes/7/label/key1")
+
+	_, ok = store.Get("/nodes/7")
+	assert.False(t, ok)
 }
