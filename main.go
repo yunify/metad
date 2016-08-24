@@ -149,6 +149,16 @@ func watchManage() {
 	mapping.HandleFunc("/{nodePath:.*}", mappingUpdate).Methods("POST", "PUT")
 	mapping.HandleFunc("/{nodePath:.*}", mappingDelete).Methods("DELETE")
 
+	v1.HandleFunc("/data", dataGet).Methods("GET")
+	v1.HandleFunc("/data", dataUpdate).Methods("POST", "PUT")
+	v1.HandleFunc("/data", dataDelete).Methods("DELETE")
+
+	data := v1.PathPrefix("/data").Subrouter()
+	//mapping.HandleFunc("", mappingGET).Methods("GET")
+	data.HandleFunc("/{nodePath:.*}", dataGet).Methods("GET")
+	data.HandleFunc("/{nodePath:.*}", dataUpdate).Methods("POST", "PUT")
+	data.HandleFunc("/{nodePath:.*}", dataDelete).Methods("DELETE")
+
 	log.Info("Listening for Manage on %s", config.ListenManage)
 	go http.ListenAndServe(config.ListenManage, manageRouter)
 }
@@ -172,6 +182,67 @@ func getNodePath(requestURI string) string {
 	parts := strings.Split(requestURI, "/")
 	nodePath := "/" + strings.Join(parts[3:], "/")
 	return nodePath
+}
+
+func dataGet(w http.ResponseWriter, req *http.Request) {
+	vars := mux.Vars(req)
+	nodePath := vars["nodePath"]
+	if nodePath == "" {
+		nodePath = "/"
+	}
+	val, ok := metadataRepo.GetData(nodePath)
+	if !ok {
+		log.Warning("dataGet %s not found", nodePath)
+		respondError(w, req, "Not found", http.StatusNotFound)
+	} else {
+		log.Info("dataGet %s OK", nodePath)
+		respondSuccess(w, req, val)
+	}
+}
+
+func dataUpdate(w http.ResponseWriter, req *http.Request) {
+	vars := mux.Vars(req)
+	nodePath := vars["nodePath"]
+	if nodePath == "" {
+		nodePath = "/"
+	}
+	decoder := json.NewDecoder(req.Body)
+	var data interface{}
+	err := decoder.Decode(&data)
+	if err != nil {
+		respondError(w, req, fmt.Sprintf("invalid json format, error:%s", err.Error()), 400)
+	} else {
+		// POST means replace old value
+		// PUT means merge to old value
+		replace := "POST" == strings.ToUpper(req.Method)
+		err = metadataRepo.UpdateData(nodePath, data, replace)
+		if err != nil {
+			msg := fmt.Sprintf("Update data error:%s", err.Error())
+			log.Error("dataUpdate  nodePath:%s, data:%v, error:%s", nodePath, data, err.Error())
+			respondError(w, req, msg, http.StatusInternalServerError)
+		} else {
+			log.Info("dataUpdate %s OK", nodePath)
+			respondSuccessDefault(w, req)
+		}
+	}
+}
+
+func dataDelete(w http.ResponseWriter, req *http.Request) {
+	vars := mux.Vars(req)
+	nodePath := vars["nodePath"]
+	if nodePath == "" {
+		nodePath = "/"
+	}
+	dir := nodePath[len(nodePath)-1] == '/' || "true" == strings.ToLower(req.FormValue("dir"))
+	err := metadataRepo.DeleteData(nodePath, dir)
+	if err != nil {
+		msg := fmt.Sprintf("Delete data error:%s", err.Error())
+		log.Error("dataDelete  nodePath:%s, error:%s", nodePath, err.Error())
+		respondError(w, req, msg, http.StatusInternalServerError)
+	} else {
+		log.Info("dataDelete %s OK", nodePath)
+		respondSuccessDefault(w, req)
+	}
 }
 
 func mappingGet(w http.ResponseWriter, req *http.Request) {
@@ -225,7 +296,7 @@ func mappingDelete(w http.ResponseWriter, req *http.Request) {
 	}
 	err := metadataRepo.DeleteMapping(nodePath)
 	if err != nil {
-		msg := fmt.Sprintf("Update mapping error:%s", err.Error())
+		msg := fmt.Sprintf("Delete mapping error:%s", err.Error())
 		log.Error("mappingDelete  nodePath:%s, error:%s", nodePath, err.Error())
 		respondError(w, req, msg, http.StatusInternalServerError)
 	} else {

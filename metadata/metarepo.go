@@ -164,36 +164,20 @@ func (r *MetadataRepo) Unregister(clientIP string) {
 	r.mapping.Delete(clientIP)
 }
 
+func (r *MetadataRepo) GetData(nodePath string) (interface{}, bool) {
+	return r.data.Get(nodePath)
+}
+
 func (r *MetadataRepo) UpdateData(nodePath string, data interface{}, replace bool) error {
 	return r.storeClient.Set(nodePath, data, replace)
 }
 
-func checkMapping(data interface{}) error {
-	m, ok := data.(map[string]interface{})
-	if !ok {
-		return errors.New("mapping data should be json object.")
-	}
-	for k, v := range m {
-		if strings.Index(k, "/") >= 0 {
-			return errors.New("mapping key should not be path.")
-		}
-		err := checkMappingPath(v)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
+func (r *MetadataRepo) DeleteData(nodePath string, dir bool) error {
+	return r.storeClient.Delete(nodePath, dir)
 }
 
-func checkMappingPath(v interface{}) error {
-	vs, vok := v.(string)
-	if !vok {
-		return errors.New("mapping's value should be path .")
-	}
-	if vs == "" || vs[0] != '/' {
-		return errors.New("mapping's value should be path .")
-	}
-	return nil
+func (r *MetadataRepo) GetMapping(nodePath string) (interface{}, bool) {
+	return r.mapping.Get(nodePath)
 }
 
 func (r *MetadataRepo) UpdateMapping(nodePath string, data interface{}, replace bool) error {
@@ -245,6 +229,30 @@ func (r *MetadataRepo) DeleteMapping(nodePath string) error {
 	return r.storeClient.DeleteMapping(nodePath)
 }
 
-func (r *MetadataRepo) GetMapping(nodePath string) (interface{}, bool) {
-	return r.mapping.Get(nodePath)
+func checkMapping(data interface{}) error {
+	m, ok := data.(map[string]interface{})
+	if !ok {
+		return errors.New("mapping data should be json object.")
+	}
+	for k, v := range m {
+		if strings.Index(k, "/") >= 0 {
+			return errors.New("mapping key should not be path.")
+		}
+		err := checkMappingPath(v)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func checkMappingPath(v interface{}) error {
+	vs, vok := v.(string)
+	if !vok {
+		return errors.New("mapping's value should be path .")
+	}
+	if vs == "" || vs[0] != '/' {
+		return errors.New("mapping's value should be path .")
+	}
+	return nil
 }

@@ -18,11 +18,7 @@ func init() {
 }
 
 var (
-	backend      = "etcdv3"
-	backendNodes = []string{
-		//"etcd",
-		"etcdv3",
-	}
+	backend = "etcdv3"
 	maxNode = 10
 )
 
@@ -40,14 +36,12 @@ func TestMetarepo(t *testing.T) {
 	storeClient, err := backends.New(config)
 	assert.NoError(t, err)
 
-	storeClient.Delete("/", true)
-	//assert.NoError(t, err)
-
 	metarepo := New(false, storeClient)
+	metarepo.DeleteData("/", true)
 
 	metarepo.StartSync()
 
-	testData := FillTestData(storeClient)
+	testData := FillTestData(metarepo)
 	time.Sleep(1000 * time.Millisecond)
 	ValidTestData(t, testData, metarepo.data)
 
@@ -61,7 +55,7 @@ func TestMetarepo(t *testing.T) {
 	_, mok = mapVal["name"]
 	assert.True(t, mok)
 
-	storeClient.Delete("/nodes/0", true)
+	metarepo.DeleteData("/nodes/0", true)
 
 	if backend == "etcd" {
 		//TODO etcd v2 current not support watch children delete. so try resync
@@ -72,7 +66,7 @@ func TestMetarepo(t *testing.T) {
 	_, ok = metarepo.Get("192.168.0.1", "/nodes/0")
 	assert.False(t, ok)
 
-	storeClient.Delete("/", true)
+	metarepo.DeleteData("/", true)
 }
 
 func TestMetarepoSelf(t *testing.T) {
@@ -88,14 +82,14 @@ func TestMetarepoSelf(t *testing.T) {
 	storeClient, err := backends.New(config)
 	assert.NoError(t, err)
 
-	storeClient.Delete("/", true)
-
 	metarepo := New(false, storeClient)
+
 	metarepo.DeleteMapping("/")
+	metarepo.DeleteData("/", true)
 
 	metarepo.StartSync()
 
-	testData := FillTestData(storeClient)
+	testData := FillTestData(metarepo)
 	time.Sleep(1000 * time.Millisecond)
 	ValidTestData(t, testData, metarepo.data)
 
@@ -135,7 +129,7 @@ func TestMetarepoSelf(t *testing.T) {
 	assert.Equal(t, fmt.Sprintf("node%v", p), val)
 
 	//test date delete
-	storeClient.Delete(fmt.Sprintf("/nodes/%v/name", p), false)
+	metarepo.DeleteData(fmt.Sprintf("/nodes/%v/name", p), false)
 
 	if backend == "etcd" {
 		//etcd v2 current not support watch children's children delete. so try resync
@@ -195,7 +189,7 @@ func TestMetarepoSelf(t *testing.T) {
 	assert.True(t, ok)
 	assert.Equal(t, expectMapping0, mapping)
 
-	storeClient.Delete("/", true)
+	metarepo.DeleteData("/", true)
 	metarepo.DeleteMapping("/")
 }
 
@@ -213,13 +207,12 @@ func TestMetarepoRoot(t *testing.T) {
 	storeClient, err := backends.New(config)
 	assert.NoError(t, err)
 
-	storeClient.Delete("/", true)
-
-	FillTestData(storeClient)
-
 	metarepo := New(false, storeClient)
 
 	metarepo.DeleteMapping("/")
+	metarepo.DeleteData("/", true)
+
+	FillTestData(metarepo)
 
 	metarepo.StartSync()
 	time.Sleep(1000 * time.Millisecond)
@@ -247,11 +240,11 @@ func TestMetarepoRoot(t *testing.T) {
 	assert.NotNil(t, selfVal)
 	assert.True(t, len(mapVal) == 1)
 
-	storeClient.Delete("/", true)
+	metarepo.DeleteData("/", true)
 	metarepo.DeleteMapping("/")
 }
 
-func FillTestData(storeClient backends.StoreClient) map[string]string {
+func FillTestData(metarepo *MetadataRepo) map[string]string {
 	nodes := make(map[string]interface{})
 	for i := 0; i < maxNode; i++ {
 		node := make(map[string]interface{})
@@ -262,7 +255,7 @@ func FillTestData(storeClient backends.StoreClient) map[string]string {
 	testData := map[string]interface{}{
 		"nodes": nodes,
 	}
-	err := storeClient.Set("/", testData, true)
+	err := metarepo.UpdateData("/", testData, true)
 	if err != nil {
 		log.Error("SetValues error", err.Error())
 		panic(err)

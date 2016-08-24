@@ -33,7 +33,12 @@ metadata-proxy
 
 Manage API default port is 127.0.0.1:8112
 
-* /v1/mapping[/{nodePath}] manage metadata and ip mapping
+* /v1/data[/{nodePath}] manage metadata
+    * GET show metadata.
+    * POST create or replace metadata. 
+    * PUT create or merge metadata.
+    * DELETE delete metadata.
+* /v1/mapping[/{nodePath}] manage metadata's ip mapping
     * GET show mapping config.
     * POST create or replace mapping config. 
     * PUT create or merge update mapping config.
@@ -60,7 +65,7 @@ bin/metadata-proxy --backend etcdv3 --nodes 127.0.0.1:2379 --log_level debug --l
 export ETCDCTL_API=3
 ```
 
-* fill data to etcd
+* fill data by etcd
 
 ```
 for i in `seq 1 5`; 
@@ -68,6 +73,37 @@ do
     etcdctl put /nodes/$i/name node$i; 
     etcdctl put /nodes/$i/ip 192.168.1.$i;
 done
+```
+
+* fill data by metadata-proxy
+
+```
+curl -X POST -H "Content-Type: application/json" http://127.0.0.1:8112/v1/data -d '{"nodes":{"1":{"ip":"192.168.1.1","name":"node1"},"2":{"ip":"192.168.1.2","name":"node2"},"3":{"ip":"192.168.1.3","name":"node3"},"4":{"ip":"192.168.1.4","name":"node4"},"5":{"ip":"192.168.1.5","name":"node5"}}}'
+
+OK
+```
+
+* update and delete metadata
+
+```
+curl -X PUT -H "Content-Type: application/json" http://127.0.0.1:8112/v1/data/nodes -d '{"6":{"ip":"192.168.1.6","name":"node6"}}'
+
+OK
+
+
+curl -H "Accept: application/json" http://127.0.0.1:8112/v1/data
+
+{"nodes":{"1":{"ip":"192.168.1.1","name":"node1"},"2":{"ip":"192.168.1.2","name":"node2"},"3":{"ip":"192.168.1.3","name":"node3"},"4":{"ip":"192.168.1.4","name":"node4"},"5":{"ip":"192.168.1.5","name":"node5"},"6":{"ip":"192.168.1.6","name":"node6"}}}
+
+
+curl -X PUT -H "Content-Type: application/json" http://127.0.0.1:8112/v1/data/nodes/6/name -d '"new_node6"'
+
+OK
+
+curl -X DELETE http://127.0.0.1:8112/v1/data/6
+
+OK
+
 ```
 
 * show data
