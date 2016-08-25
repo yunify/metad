@@ -160,7 +160,7 @@ func (r *MetadataRepo) Register(clientIP string, mapping map[string]string) {
 }
 
 func (r *MetadataRepo) Unregister(clientIP string) {
-	r.storeClient.DeleteMapping(clientIP)
+	r.storeClient.DeleteMapping(clientIP, true)
 	r.mapping.Delete(clientIP)
 }
 
@@ -172,8 +172,34 @@ func (r *MetadataRepo) UpdateData(nodePath string, data interface{}, replace boo
 	return r.storeClient.Set(nodePath, data, replace)
 }
 
-func (r *MetadataRepo) DeleteData(nodePath string, dir bool) error {
-	return r.storeClient.Delete(nodePath, dir)
+func (r *MetadataRepo) DeleteData(nodePath string, subs ...string) error {
+	err := checkSubs(subs)
+	if err != nil {
+		return err
+	}
+	if len(subs) > 0 {
+		for _, sub := range subs {
+			subPath := path.Join(nodePath, sub)
+			v, ok := r.data.Get(subPath)
+			// if subPath metadata not exist, just ignore.
+			if ok {
+				_, dir := v.(map[string]interface{})
+				err = r.storeClient.Delete(subPath, dir)
+				if err != nil {
+					return err
+				}
+			}
+		}
+		return nil
+	} else {
+		v, ok := r.data.Get(nodePath)
+		if ok {
+			_, dir := v.(map[string]interface{})
+			return r.storeClient.Delete(nodePath, dir)
+		}
+		return nil
+	}
+
 }
 
 func (r *MetadataRepo) GetMapping(nodePath string) (interface{}, bool) {
@@ -225,8 +251,42 @@ func (r *MetadataRepo) UpdateMapping(nodePath string, data interface{}, replace 
 	return r.storeClient.UpdateMapping(nodePath, data, replace)
 }
 
-func (r *MetadataRepo) DeleteMapping(nodePath string) error {
-	return r.storeClient.DeleteMapping(nodePath)
+func (r *MetadataRepo) DeleteMapping(nodePath string, subs ...string) error {
+	err := checkSubs(subs)
+	if err != nil {
+		return err
+	}
+	if len(subs) > 0 {
+		for _, sub := range subs {
+			subPath := path.Join(nodePath, sub)
+			v, ok := r.mapping.Get(subPath)
+			// if subPath mapping not exist, just ignore.
+			if ok {
+				_, dir := v.(map[string]interface{})
+				err = r.storeClient.DeleteMapping(subPath, dir)
+				if err != nil {
+					return err
+				}
+			}
+		}
+		return nil
+	} else {
+		v, ok := r.mapping.Get(nodePath)
+		if ok {
+			_, dir := v.(map[string]interface{})
+			return r.storeClient.DeleteMapping(nodePath, dir)
+		}
+		return nil
+	}
+}
+
+func checkSubs(subs []string) error {
+	for _, sub := range subs {
+		if strings.Index(sub, "/") >= 0 {
+			return errors.New("Sub node must not a path.")
+		}
+	}
+	return nil
 }
 
 func checkMapping(data interface{}) error {

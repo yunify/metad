@@ -22,7 +22,7 @@ var (
 	maxNode = 10
 )
 
-func TestMetarepo(t *testing.T) {
+func TestMetarepoData(t *testing.T) {
 
 	prefix := fmt.Sprintf("/prefix%v", rand.Intn(1000))
 
@@ -37,7 +37,7 @@ func TestMetarepo(t *testing.T) {
 	assert.NoError(t, err)
 
 	metarepo := New(false, storeClient)
-	metarepo.DeleteData("/", true)
+	metarepo.DeleteData("/")
 
 	metarepo.StartSync()
 
@@ -55,18 +55,90 @@ func TestMetarepo(t *testing.T) {
 	_, mok = mapVal["name"]
 	assert.True(t, mok)
 
-	metarepo.DeleteData("/nodes/0", true)
+	metarepo.DeleteData("/nodes/0")
 
 	if backend == "etcd" {
 		//TODO etcd v2 current not support watch children delete. so try resync
-
 		metarepo.ReSync()
 	}
 	time.Sleep(1000 * time.Millisecond)
-	_, ok = metarepo.Get("192.168.0.1", "/nodes/0")
+	_, ok = metarepo.GetData("/nodes/0")
 	assert.False(t, ok)
 
-	metarepo.DeleteData("/", true)
+	subs := []string{"1", "3", "noexistkey"}
+	//test batch delete
+	err = metarepo.DeleteData("nodes", subs...)
+	time.Sleep(1000 * time.Millisecond)
+	assert.NoError(t, err)
+
+	for _, sub := range subs {
+		_, ok = metarepo.GetData("/nodes/" + sub)
+		assert.False(t, ok)
+	}
+
+	_, ok = metarepo.GetData("/nodes/2")
+	assert.True(t, ok)
+
+	metarepo.DeleteData("/")
+}
+
+func TestMetarepoMapping(t *testing.T) {
+
+	prefix := fmt.Sprintf("/prefix%v", rand.Intn(1000))
+
+	nodes := backends.GetDefaultBackends(backend)
+
+	config := backends.Config{
+		Backend:      backend,
+		BackendNodes: nodes,
+		Prefix:       prefix,
+	}
+	storeClient, err := backends.New(config)
+	assert.NoError(t, err)
+
+	metarepo := New(false, storeClient)
+	metarepo.DeleteData("/")
+	metarepo.DeleteMapping("/")
+
+	metarepo.StartSync()
+
+	key := "node"
+	mappings := make(map[string]interface{})
+	for i := 0; i < maxNode; i++ {
+		ip := fmt.Sprintf("192.168.1.%v", i)
+		mapping := map[string]interface{}{
+			key:     fmt.Sprintf("/nodes/%v", i),
+			"nodes": "/",
+		}
+		mappings[ip] = mapping
+	}
+	// batch update
+	err = metarepo.UpdateMapping("/", mappings, true)
+	assert.NoError(t, err)
+	time.Sleep(1000 * time.Millisecond)
+
+	metarepo.DeleteMapping("/192.168.1.0")
+
+	time.Sleep(1000 * time.Millisecond)
+	_, ok := metarepo.GetMapping("/192.168.1.0")
+	assert.False(t, ok)
+
+	subs := []string{"192.168.1.1", "192.168.1.3", "noexistkey"}
+	//test batch delete
+	err = metarepo.DeleteMapping("/", subs...)
+	time.Sleep(1000 * time.Millisecond)
+	assert.NoError(t, err)
+
+	for _, sub := range subs {
+		_, ok = metarepo.GetMapping("/" + sub)
+		assert.False(t, ok)
+	}
+
+	_, ok = metarepo.GetMapping("/192.168.1.2")
+	assert.True(t, ok)
+
+	metarepo.DeleteData("/")
+	metarepo.DeleteMapping("/")
 }
 
 func TestMetarepoSelf(t *testing.T) {
@@ -85,7 +157,7 @@ func TestMetarepoSelf(t *testing.T) {
 	metarepo := New(false, storeClient)
 
 	metarepo.DeleteMapping("/")
-	metarepo.DeleteData("/", true)
+	metarepo.DeleteData("/")
 
 	metarepo.StartSync()
 
@@ -129,7 +201,7 @@ func TestMetarepoSelf(t *testing.T) {
 	assert.Equal(t, fmt.Sprintf("node%v", p), val)
 
 	//test date delete
-	metarepo.DeleteData(fmt.Sprintf("/nodes/%v/name", p), false)
+	metarepo.DeleteData(fmt.Sprintf("/nodes/%v/name", p))
 
 	if backend == "etcd" {
 		//etcd v2 current not support watch children's children delete. so try resync
@@ -189,7 +261,7 @@ func TestMetarepoSelf(t *testing.T) {
 	assert.True(t, ok)
 	assert.Equal(t, expectMapping0, mapping)
 
-	metarepo.DeleteData("/", true)
+	metarepo.DeleteData("/")
 	metarepo.DeleteMapping("/")
 }
 
@@ -210,7 +282,7 @@ func TestMetarepoRoot(t *testing.T) {
 	metarepo := New(false, storeClient)
 
 	metarepo.DeleteMapping("/")
-	metarepo.DeleteData("/", true)
+	metarepo.DeleteData("/")
 
 	FillTestData(metarepo)
 
@@ -240,7 +312,7 @@ func TestMetarepoRoot(t *testing.T) {
 	assert.NotNil(t, selfVal)
 	assert.True(t, len(mapVal) == 1)
 
-	metarepo.DeleteData("/", true)
+	metarepo.DeleteData("/")
 	metarepo.DeleteMapping("/")
 }
 

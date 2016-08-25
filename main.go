@@ -233,8 +233,12 @@ func dataDelete(w http.ResponseWriter, req *http.Request) {
 	if nodePath == "" {
 		nodePath = "/"
 	}
-	dir := nodePath[len(nodePath)-1] == '/' || "true" == strings.ToLower(req.FormValue("dir"))
-	err := metadataRepo.DeleteData(nodePath, dir)
+	subsParam := req.FormValue("subs")
+	var subs []string
+	if subsParam != "" {
+		subs = strings.Split(subsParam, ",")
+	}
+	err := metadataRepo.DeleteData(nodePath, subs...)
 	if err != nil {
 		msg := fmt.Sprintf("Delete data error:%s", err.Error())
 		log.Error("dataDelete  nodePath:%s, error:%s", nodePath, err.Error())
@@ -294,7 +298,12 @@ func mappingDelete(w http.ResponseWriter, req *http.Request) {
 	if nodePath == "" {
 		nodePath = "/"
 	}
-	err := metadataRepo.DeleteMapping(nodePath)
+	subsParam := req.FormValue("subs")
+	var subs []string
+	if subsParam != "" {
+		subs = strings.Split(subsParam, ",")
+	}
+	err := metadataRepo.DeleteMapping(nodePath, subs...)
 	if err != nil {
 		msg := fmt.Sprintf("Delete mapping error:%s", err.Error())
 		log.Error("mappingDelete  nodePath:%s, error:%s", nodePath, err.Error())

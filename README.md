@@ -80,7 +80,6 @@ done
 ```
 curl -X POST -H "Content-Type: application/json" http://127.0.0.1:8112/v1/data -d '{"nodes":{"1":{"ip":"192.168.1.1","name":"node1"},"2":{"ip":"192.168.1.2","name":"node2"},"3":{"ip":"192.168.1.3","name":"node3"},"4":{"ip":"192.168.1.4","name":"node4"},"5":{"ip":"192.168.1.5","name":"node5"}}}'
 
-OK
 ```
 
 * update and delete metadata
@@ -88,21 +87,27 @@ OK
 ```
 curl -X PUT -H "Content-Type: application/json" http://127.0.0.1:8112/v1/data/nodes -d '{"6":{"ip":"192.168.1.6","name":"node6"}}'
 
-OK
-
 
 curl -H "Accept: application/json" http://127.0.0.1:8112/v1/data
 
 {"nodes":{"1":{"ip":"192.168.1.1","name":"node1"},"2":{"ip":"192.168.1.2","name":"node2"},"3":{"ip":"192.168.1.3","name":"node3"},"4":{"ip":"192.168.1.4","name":"node4"},"5":{"ip":"192.168.1.5","name":"node5"},"6":{"ip":"192.168.1.6","name":"node6"}}}
 
+# add label to /nodes/6
+
+curl -X PUT -H "Content-Type: application/json" http://127.0.0.1:8112/v1/data/nodes/6 -d '{"label":{"key1":"value1"}}'
+
+# update leaf node value, value should be a json value, so string must have quota
 
 curl -X PUT -H "Content-Type: application/json" http://127.0.0.1:8112/v1/data/nodes/6/name -d '"new_node6"'
 
-OK
+# delete sub nodes, /nodes/6/name will keep.
+
+curl -X DELETE http://127.0.0.1:8112/v1/data/nodes/6?subs=ip,labels
+
+# delete /nodes/6 dir
 
 curl -X DELETE http://127.0.0.1:8112/v1/data/6
 
-OK
 
 ```
 
@@ -203,9 +208,8 @@ mapping create
 
 ```
 
-curl -H "Content-Type: application/json" -X POST http://127.0.0.1:8112/v1/mapping -d '{"192.168.1.1":{"node":"/nodes/1"}}'
+curl -H "Content-Type: application/json" -X POST http://127.0.0.1:8112/v1/mapping -d '{"192.168.1.1":{"node":"/nodes/1"}, "192.168.1.2":{"node":"/nodes/2"}, "192.168.1.3":{"node":"/nodes/3"}}'
 
-OK
 ```
 
 show mapping
@@ -214,7 +218,7 @@ show mapping
 
 curl -H "Accept: application/json" http://127.0.0.1:8112/v1/mapping
 
-{"192.168.1.1":{"node":"/nodes/1"}}
+{"192.168.1.1":{"node":"/nodes/1"},"192.168.1.2":{"node":"/nodes/2"},"192.168.1.3":{"node":"/nodes/3"}}
 ```
 
 self request
@@ -246,8 +250,6 @@ curl -H "Accept: application/json" http://127.0.0.1:8112/v1/mapping
 
 curl -H "Content-Type: application/json" -X PUT http://127.0.0.1:8112/v1/mapping/192.168.1.1/node2 -d '"/nodes/2"'
 
-OK
-
 
 curl -H "Accept: application/json" http://127.0.0.1:8112/v1/mapping
 
@@ -257,20 +259,20 @@ curl -H "Accept: application/json" http://127.0.0.1:8112/v1/mapping
 delete mapping
 
 ```
+# delete mapping key
+
 curl -X DELETE http://127.0.0.1:8112/v1/mapping/192.168.1.1/node2
 
-OK
-
-curl -H "Accept: application/json" http://127.0.0.1:8112/v1/mapping
-
-{"192.168.1.1":{"node":"/nodes/1","nodes":"/nodes"}}
-
+# delete dir and subs
 
 curl -X DELETE http://127.0.0.1:8112/v1/mapping/192.168.1.1
 
 OK
 
-curl -H "Accept: application/json" http://127.0.0.1:8112/v1/mapping
+# delete subs
 
-{}
+curl -X DELETE http://127.0.0.1:8112/v1/mapping?subs=192.168.1.2,192.168.1.3
+
+curl http://127.0.0.1:8112/v1/mapping
+
 ```

@@ -23,7 +23,7 @@ type StoreClient interface {
 	Delete(nodePath string, dir bool) error
 	SyncMapping(mapping store.Store, stopChan chan bool)
 	UpdateMapping(nodePath string, mapping interface{}, replace bool) error
-	DeleteMapping(nodePath string) error
+	DeleteMapping(nodePath string, dir bool) error
 }
 
 // New is used to create a storage client based on our configuration.

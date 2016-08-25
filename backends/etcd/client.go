@@ -15,7 +15,6 @@ import (
 	"net/http"
 	"path"
 	"reflect"
-	"strings"
 	"time"
 )
 
@@ -309,9 +308,7 @@ func (c *Client) UpdateMapping(nodePath string, mapping interface{}, replace boo
 	return c.internalSet(SELF_MAPPING_PATH, nodePath, mapping, replace)
 }
 
-func (c *Client) DeleteMapping(nodePath string) error {
+func (c *Client) DeleteMapping(nodePath string, dir bool) error {
 	nodePath = path.Join("/", nodePath)
-	// mapping nodePath path only two level /$ip/$key, split: [,ip,key]
-	dir := len(strings.Split(nodePath, "/")) <= 2
 	return c.internalDelete(SELF_MAPPING_PATH, nodePath, dir)
 }
