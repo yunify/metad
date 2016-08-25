@@ -89,19 +89,19 @@ func NewEtcdClient(prefix string, machines []string, cert, key, caCert string, b
 	return &Client{kapi, prefix}, nil
 }
 
-// GetValues queries etcd for key Recursive:true.
-func (c *Client) GetValues(key string) (map[string]interface{}, error) {
-	m, err := c.internalGetValues(c.prefix, key)
+// GetValues queries etcd for nodePath Recursive:true.
+func (c *Client) GetValues(nodePath string) (map[string]interface{}, error) {
+	m, err := c.internalGetValues(c.prefix, nodePath)
 	if err != nil {
 		return nil, err
 	}
-	return flatmap.Expand(m, key), nil
+	return flatmap.Expand(m, nodePath), nil
 }
 
-func (c *Client) internalGetValues(prefix, key string) (map[string]string, error) {
+func (c *Client) internalGetValues(prefix, nodePath string) (map[string]string, error) {
 	vars := make(map[string]string)
-	key = util.AppendPathPrefix(key, prefix)
-	resp, err := c.client.Get(context.Background(), key, &client.GetOptions{
+	nodePath = util.AppendPathPrefix(nodePath, prefix)
+	resp, err := c.client.Get(context.Background(), nodePath, &client.GetOptions{
 		Recursive: true,
 		Sort:      true,
 		Quorum:    true,
@@ -109,9 +109,9 @@ func (c *Client) internalGetValues(prefix, key string) (map[string]string, error
 	if err != nil {
 		switch e := err.(type) {
 		case client.Error:
-			//if key is not exist, just return empty map.
+			//if nodePath is not exist, just return empty map.
 			if e.Code == client.ErrorCodeKeyNotFound {
-				log.Warning("GetValues key:%s ErrorCodeKeyNotFound", key)
+				log.Warning("GetValues nodePath:%s ErrorCodeKeyNotFound", nodePath)
 				return make(map[string]string), nil
 			}
 		}
@@ -121,17 +121,17 @@ func (c *Client) internalGetValues(prefix, key string) (map[string]string, error
 	if err != nil {
 		return nil, err
 	}
-	log.Debug("GetValues key:%s, values:%v", key, vars)
+	log.Debug("GetValues nodePath:%s, values:%v", nodePath, vars)
 	return vars, nil
 }
 
 // nodeWalk recursively descends nodes, updating vars.
 func nodeWalk(prefix string, node *client.Node, vars map[string]string) error {
 	if node != nil {
-		key := node.Key
+		nodePath := node.Key
 		if !node.Dir {
-			key = util.TrimPathPrefix(key, prefix)
-			vars[key] = node.Value
+			nodePath = util.TrimPathPrefix(nodePath, prefix)
+			vars[nodePath] = node.Value
 		} else {
 			for _, node := range node.Nodes {
 				nodeWalk(prefix, node, vars)
@@ -141,17 +141,17 @@ func nodeWalk(prefix string, node *client.Node, vars map[string]string) error {
 	return nil
 }
 
-// GetValue queries etcd for key
-func (c *Client) GetValue(key string) (string, error) {
-	return c.internalGetValue(c.prefix, key)
+// GetValue queries etcd for nodePath
+func (c *Client) GetValue(nodePath string) (string, error) {
+	return c.internalGetValue(c.prefix, nodePath)
 }
 
-func (c *Client) internalGetValue(prefix, key string) (string, error) {
-	resp, err := c.client.Get(context.Background(), util.AppendPathPrefix(key, prefix), nil)
+func (c *Client) internalGetValue(prefix, nodePath string) (string, error) {
+	resp, err := c.client.Get(context.Background(), util.AppendPathPrefix(nodePath, prefix), nil)
 	if err != nil {
 		switch e := err.(type) {
 		case client.Error:
-			//if key is not exist, just return empty str.
+			//if nodePath is not exist, just return empty str.
 			if e.Code == client.ErrorCodeKeyNotFound {
 				return "", nil
 			}
@@ -191,10 +191,10 @@ func (c *Client) internalSync(prefix string, store store.Store, stopChan chan bo
 		for !inited {
 			val, err := c.internalGetValues(prefix, "/")
 			if err != nil {
-				log.Error("GetValue from etcd key:%s, error-type: %s, error: %s", prefix, reflect.TypeOf(err), err.Error())
+				log.Error("GetValue from etcd nodePath:%s, error-type: %s, error: %s", prefix, reflect.TypeOf(err), err.Error())
 				switch e := err.(type) {
 				case client.Error:
-					//if key of prefix is not exist, just create a empty dir.
+					//if nodePath of prefix is not exist, just create a empty dir.
 					if e.Code == client.ErrorCodeKeyNotFound {
 						resp, createErr := c.client.Set(context.Background(), prefix, "", &client.SetOptions{
 							Dir: true,
@@ -225,14 +225,14 @@ func (c *Client) internalSync(prefix string, store store.Store, stopChan chan bo
 }
 
 func processSyncChange(prefix string, store store.Store, resp *client.Response) {
-	key := util.TrimPathPrefix(resp.Node.Key, prefix)
-	log.Debug("process sync change, prefix: %v, key:%v, resp: %v ", prefix, key, resp)
+	nodePath := util.TrimPathPrefix(resp.Node.Key, prefix)
+	log.Debug("process sync change, prefix: %v, nodePath:%v, resp: %v ", prefix, nodePath, resp)
 	//TODO wait etcd 3.1.0 support watch children dir action. https://github.com/coreos/etcd/issues/1229
 	switch resp.Action {
 	case "delete":
-		store.Delete(key)
+		store.Delete(nodePath)
 	default:
-		store.Set(key, false, resp.Node.Value)
+		store.Set(nodePath, false, resp.Node.Value)
 	}
 }
 
@@ -240,35 +240,35 @@ func (c *Client) Sync(store store.Store, stopChan chan bool) {
 	go c.internalSync(c.prefix, store, stopChan)
 }
 
-func (c *Client) Set(key string, value interface{}, replace bool) error {
-	return c.internalSet(c.prefix, key, value, replace)
+func (c *Client) Set(nodePath string, value interface{}, replace bool) error {
+	return c.internalSet(c.prefix, nodePath, value, replace)
 }
 
-func (c *Client) internalSet(prefix, key string, value interface{}, replace bool) error {
+func (c *Client) internalSet(prefix, nodePath string, value interface{}, replace bool) error {
 	switch t := value.(type) {
 	case map[string]interface{}, map[string]string, []interface{}:
 		flatValues := flatmap.Flatten(t)
-		return c.internalSetValues(prefix, key, flatValues, replace)
+		return c.internalSetValues(prefix, nodePath, flatValues, replace)
 	default:
 		val := fmt.Sprintf("%v", t)
-		return c.internalSetValue(prefix, key, val)
+		return c.internalSetValue(prefix, nodePath, val)
 	}
 }
 
-func (c *Client) SetValues(key string, values map[string]interface{}, replace bool) error {
+func (c *Client) SetValues(nodePath string, values map[string]interface{}, replace bool) error {
 	flatValue := flatmap.Flatten(values)
-	return c.internalSetValues(c.prefix, key, flatValue, replace)
+	return c.internalSetValues(c.prefix, nodePath, flatValue, replace)
 }
 
-func (c *Client) internalSetValues(prefix string, key string, values map[string]string, replace bool) error {
+func (c *Client) internalSetValues(prefix string, nodePath string, values map[string]string, replace bool) error {
 	if replace {
-		c.internalDelete(prefix, key, true)
+		c.internalDelete(prefix, nodePath, true)
 	}
-	new_prefix := util.AppendPathPrefix(key, prefix)
+	new_prefix := util.AppendPathPrefix(nodePath, prefix)
 	for k, v := range values {
 		k = util.AppendPathPrefix(k, new_prefix)
 		resp, err := c.client.Set(context.TODO(), k, v, nil)
-		log.Debug("SetValue key:%s, value:%s, resp:%v", k, v, resp)
+		log.Debug("SetValue nodePath:%s, value:%s, resp:%v", k, v, resp)
 		if err != nil {
 			return err
 		}
@@ -276,28 +276,28 @@ func (c *Client) internalSetValues(prefix string, key string, values map[string]
 	return nil
 }
 
-func (c *Client) SetValue(key string, value string) error {
-	return c.internalSetValue(c.prefix, key, value)
+func (c *Client) SetValue(nodePath string, value string) error {
+	return c.internalSetValue(c.prefix, nodePath, value)
 }
 
-func (c *Client) internalSetValue(prefix string, key string, value string) error {
-	key = util.AppendPathPrefix(key, prefix)
-	resp, err := c.client.Set(context.TODO(), key, value, nil)
-	log.Debug("SetValue key: %s, value:%s, resp:%v", key, value, resp)
+func (c *Client) internalSetValue(prefix string, nodePath string, value string) error {
+	nodePath = util.AppendPathPrefix(nodePath, prefix)
+	resp, err := c.client.Set(context.TODO(), nodePath, value, nil)
+	log.Debug("SetValue nodePath: %s, value:%s, resp:%v", nodePath, value, resp)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (c *Client) Delete(key string, dir bool) error {
-	return c.internalDelete(c.prefix, key, dir)
+func (c *Client) Delete(nodePath string, dir bool) error {
+	return c.internalDelete(c.prefix, nodePath, dir)
 }
 
-func (c *Client) internalDelete(prefix, key string, dir bool) error {
-	key = util.AppendPathPrefix(key, prefix)
-	log.Debug("Delete from backend, key:%s, dir:%v", key, dir)
-	_, err := c.client.Delete(context.Background(), key, &client.DeleteOptions{Recursive: dir})
+func (c *Client) internalDelete(prefix, nodePath string, dir bool) error {
+	nodePath = util.AppendPathPrefix(nodePath, prefix)
+	log.Debug("Delete from backend, nodePath:%s, dir:%v", nodePath, dir)
+	_, err := c.client.Delete(context.Background(), nodePath, &client.DeleteOptions{Recursive: dir})
 	return err
 }
 
@@ -305,13 +305,13 @@ func (c *Client) SyncMapping(mapping store.Store, stopChan chan bool) {
 	go c.internalSync(SELF_MAPPING_PATH, mapping, stopChan)
 }
 
-func (c *Client) UpdateMapping(key string, mapping interface{}, replace bool) error {
-	return c.internalSet(SELF_MAPPING_PATH, key, mapping, replace)
+func (c *Client) UpdateMapping(nodePath string, mapping interface{}, replace bool) error {
+	return c.internalSet(SELF_MAPPING_PATH, nodePath, mapping, replace)
 }
 
-func (c *Client) DeleteMapping(key string) error {
-	key = path.Join("/", key)
-	// mapping key path only two level /$ip/$key, split: [,ip,key]
-	dir := len(strings.Split(key, "/")) <= 2
-	return c.internalDelete(SELF_MAPPING_PATH, key, dir)
+func (c *Client) DeleteMapping(nodePath string) error {
+	nodePath = path.Join("/", nodePath)
+	// mapping nodePath path only two level /$ip/$key, split: [,ip,key]
+	dir := len(strings.Split(nodePath, "/")) <= 2
+	return c.internalDelete(SELF_MAPPING_PATH, nodePath, dir)
 }
