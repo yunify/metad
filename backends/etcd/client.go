@@ -198,32 +198,31 @@ func (c *Client) internalGet(prefix, nodePath string) (string, error) {
 
 func (c *Client) internalSync(prefix string, store store.Store, stopChan chan bool) {
 
-	defer func() {
-		if r := recover(); r != nil {
-			log.Error("Sync Recover: %v, try restart.", r)
-			time.Sleep(time.Duration(1000) * time.Millisecond)
-			c.internalSync(prefix, store, stopChan)
-		}
-	}()
-
 	var waitIndex uint64 = 0
-	inited := false
+	init := false
+	cancelRoutine := make(chan bool)
+	defer close(cancelRoutine)
+
 	for {
+		select {
+		case <-cancelRoutine:
+			return
+		default:
+		}
+
 		watcher := c.client.Watcher(prefix, &client.WatcherOptions{AfterIndex: waitIndex, Recursive: true})
 		ctx, cancel := context.WithCancel(context.Background())
-		cancelRoutine := make(chan bool)
-		defer close(cancelRoutine)
-
 		go func() {
 			select {
 			case <-stopChan:
+				log.Info("Sync %s stop.", prefix)
 				cancel()
-			case <-cancelRoutine:
+				cancelRoutine <- true
 				return
 			}
 		}()
 
-		for !inited {
+		for !init {
 			val, err := c.internalGets(prefix, "/")
 			if err != nil {
 				log.Error("GetValue from etcd nodePath:%s, error-type: %s, error: %s", prefix, reflect.TypeOf(err), err.Error())
@@ -241,13 +240,14 @@ func (c *Client) internalSync(prefix string, store store.Store, stopChan chan bo
 						}
 					}
 				}
+				log.Info("Init store for prefix %s fail, retry.", prefix)
 				time.Sleep(time.Duration(1000) * time.Millisecond)
 				continue
 			}
 			store.PutBulk("/", val)
-			inited = true
+			log.Info("Init store for prefix %s success.", prefix)
+			init = true
 		}
-
 		resp, err := watcher.Next(ctx)
 		if err != nil {
 			log.Error("Watch etcd error: %s", err.Error())

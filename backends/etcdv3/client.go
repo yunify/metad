@@ -173,41 +173,41 @@ func handleGetResp(prefix string, resp *client.GetResponse, vars map[string]stri
 
 func (c *Client) internalSync(prefix string, store store.Store, stopChan chan bool) {
 
-	defer func() {
-		if r := recover(); r != nil {
-			log.Error("Sync Recover: %v, try restart.", r)
-			time.Sleep(time.Duration(1000) * time.Millisecond)
-			c.internalSync(prefix, store, stopChan)
-		}
-	}()
-
 	var rev int64 = 0
-	inited := false
+	init := false
+	cancelRoutine := make(chan bool)
+	defer close(cancelRoutine)
+
 	for {
+		select {
+		case <-cancelRoutine:
+			return
+		default:
+		}
+
 		ctx, cancel := context.WithCancel(context.Background())
 		watchChan := c.client.Watch(ctx, prefix, client.WithPrefix(), client.WithRev(rev))
-
-		cancelRoutine := make(chan bool)
-		defer close(cancelRoutine)
 
 		go func() {
 			select {
 			case <-stopChan:
+				log.Info("Sync %s stop.", prefix)
 				cancel()
-			case <-cancelRoutine:
-				return
+				cancelRoutine <- true
 			}
 		}()
 
-		for !inited {
+		for !init {
 			val, err := c.internalGets(prefix, "/")
 			if err != nil {
 				log.Error("GetValue from etcd nodePath:%s, error-type: %s, error: %s", prefix, reflect.TypeOf(err), err.Error())
 				time.Sleep(time.Duration(1000) * time.Millisecond)
+				log.Info("Init store for prefix %s fail, retry.", prefix)
 				continue
 			}
 			store.PutBulk("/", val)
-			inited = true
+			log.Info("Init store for prefix %s success.", prefix)
+			init = true
 		}
 		for resp := range watchChan {
 			processSyncChange(prefix, store, &resp)
