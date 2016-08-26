@@ -44,11 +44,3 @@ func TestConfigFile(t *testing.T) {
 
 	assert.Equal(t, config, config2)
 }
-
-func TestGetNodePath(t *testing.T) {
-	assert.Equal(t, "/192.168.1.1/node", getNodePath("/v1/mapping/192.168.1.1/node"))
-	assert.Equal(t, "/192.168.1.1", getNodePath("/v1/mapping/192.168.1.1"))
-	assert.Equal(t, "/192.168.1.1/", getNodePath("/v1/mapping/192.168.1.1/"))
-	assert.Equal(t, "/", getNodePath("/v1/mapping/"))
-	assert.Equal(t, "/", getNodePath("/v1/mapping"))
-}

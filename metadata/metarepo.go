@@ -154,16 +154,6 @@ func (r *MetadataRepo) SelfMapping(clientIP string) (map[string]string, bool) {
 	return mapping, true
 }
 
-func (r *MetadataRepo) Register(clientIP string, mapping map[string]string) {
-	log.Info("Register clientIP: %s, mapping: %v", clientIP, mapping)
-	r.storeClient.UpdateMapping(clientIP, mapping, true)
-}
-
-func (r *MetadataRepo) Unregister(clientIP string) {
-	r.storeClient.DeleteMapping(clientIP, true)
-	r.mapping.Delete(clientIP)
-}
-
 func (r *MetadataRepo) GetData(nodePath string) (interface{}, bool) {
 	return r.data.Get(nodePath)
 }
