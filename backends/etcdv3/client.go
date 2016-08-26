@@ -6,10 +6,10 @@ import (
 	"fmt"
 	client "github.com/coreos/etcd/clientv3"
 	"github.com/coreos/etcd/mvcc/mvccpb"
-	"github.com/yunify/metadata-proxy/log"
-	"github.com/yunify/metadata-proxy/store"
-	"github.com/yunify/metadata-proxy/util"
-	"github.com/yunify/metadata-proxy/util/flatmap"
+	"github.com/yunify/metad/log"
+	"github.com/yunify/metad/store"
+	"github.com/yunify/metad/util"
+	"github.com/yunify/metad/util/flatmap"
 	"golang.org/x/net/context"
 	"io/ioutil"
 	"path"
@@ -17,7 +17,7 @@ import (
 	"time"
 )
 
-const SELF_MAPPING_PATH = "/_metadata-proxy/mapping"
+const SELF_MAPPING_PATH = "/_metad/mapping"
 
 var (
 	//see github.com/coreos/etcd/etcdserver/api/v3rpc/key.go

@@ -2,7 +2,7 @@
 backend: etcd
 # Set log level: debug|info|warning
 log_level: debug
-pid_file: /var/run/metadata-proxy.pid
+pid_file: /var/run/metad.pid
 # X-Forwarded-For header support"
 xff: true
 # Default backend key prefix
@@ -16,11 +16,11 @@ listen_manage: 127.0.0.1:8112
 # Use Basic Auth to authenticate (only used with -backend=etcd)
 basic_auth: true
 # The client ca keys
-client_ca_keys: /opt/metadata-proxy/client_ca_keys
+client_ca_keys: /opt/metad/client_ca_keys
 # The client cert
-client_cert: /opt/metadata-proxy/client_cert
+client_cert: /opt/metad/client_cert
 # The client key
-client_key: /opt/metadata-proxy/client_key
+client_key: /opt/metad/client_key
 # List of backend nodes
 nodes:
 - 192.168.11.1:2379

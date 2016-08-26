@@ -7,7 +7,7 @@ package flatmap
 import (
 	"errors"
 	"fmt"
-	"github.com/yunify/metadata-proxy/log"
+	"github.com/yunify/metad/log"
 	"reflect"
 )
 

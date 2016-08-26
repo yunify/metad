@@ -1,9 +1,9 @@
-# metadata-proxy
+# metad
 
 
-`metadata-proxy` is a metadata server support the following features:
+`metad` is a metadata server support the following features:
 
-* **self** semantic support. metadata-proxy keep a mapping of IP and metadata, client direct request "/self", will get the metadata of this node. mapping settings is store to backend (etcd).
+* **self** semantic support. metad keep a mapping of IP and metadata, client direct request "/self", will get the metadata of this node. mapping settings is store to backend (etcd).
 * metadata backend support [etcd](https://github.com/coreos/etcd) (TODO support more).
 * support metadata local cache, so it can be used as a proxy to reducing the request pressure of backend (etcd).
 * api out format support json/yaml/text,and is metadata/developer friendly data structure.
@@ -17,16 +17,16 @@ Go 1.6 is required to build confd, which uses the new vendor directory.
 
 ```
 $ mkdir -p $GOPATH/src/github.com/yunify
-$ git clone https://github.com/yunify/metadata-proxy.git $GOPATH/src/github.com/yunify/metadata-proxy
-$ cd $GOPATH/src/github.com/yunify/metadata-proxy
+$ git clone https://github.com/yunify/metad.git $GOPATH/src/github.com/yunify/metad
+$ cd $GOPATH/src/github.com/yunify/metad
 $ ./build
 ```
 
-You should now have metadata-proxy in your `bin/` directory:
+You should now have metad in your `bin/` directory:
 
 ```
 $ ls bin/
-metadata-proxy
+metad
 ```
 
 ## Manage API
@@ -53,10 +53,10 @@ Manage API default port is 127.0.0.1:8112
 etcd
 ```
 
-* start metadata-proxy
+* start metad
 
 ```
-bin/metadata-proxy --backend etcdv3 --nodes 127.0.0.1:2379 --log_level debug --listen :8080 --xff true
+bin/metad --backend etcdv3 --nodes 127.0.0.1:2379 --log_level debug --listen :8080 --xff true
 ```
 
 * set etcd version
@@ -75,7 +75,7 @@ do
 done
 ```
 
-* fill data by metadata-proxy
+* fill data by metad
 
 ```
 curl -X POST -H "Content-Type: application/json" http://127.0.0.1:8112/v1/data -d '{"nodes":{"1":{"ip":"192.168.1.1","name":"node1"},"2":{"ip":"192.168.1.2","name":"node2"},"3":{"ip":"192.168.1.3","name":"node3"},"4":{"ip":"192.168.1.4","name":"node4"},"5":{"ip":"192.168.1.5","name":"node5"}}}'
@@ -142,7 +142,7 @@ node5
 ```
 
 
-by metadata-proxy text output
+by metad text output
 
 ```
 curl http://127.0.0.1:8080/
@@ -150,7 +150,7 @@ curl http://127.0.0.1:8080/
 nodes/
 ```
 
-by metadata-proxy json output
+by metad json output
 
 ```
 curl -H "Accept: application/json" http://127.0.0.1:8080/
@@ -181,7 +181,7 @@ curl -H "Accept: application/json" http://127.0.0.1:8080/
 }
 ```
 
-by metadata-proxy yaml output
+by metad yaml output
 
 ```
 curl -H "Accept: application/yaml" http://127.0.0.1:8080/

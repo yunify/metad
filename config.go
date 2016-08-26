@@ -3,9 +3,9 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/yunify/metadata-proxy/backends"
-	"github.com/yunify/metadata-proxy/log"
-	"github.com/yunify/metadata-proxy/metadata"
+	"github.com/yunify/metad/backends"
+	"github.com/yunify/metad/log"
+	"github.com/yunify/metad/metadata"
 	"gopkg.in/yaml.v2"
 	"io/ioutil"
 	"os"

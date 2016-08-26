@@ -3,8 +3,8 @@ package etcdv3
 import (
 	"fmt"
 	"github.com/stretchr/testify/assert"
-	"github.com/yunify/metadata-proxy/log"
-	"github.com/yunify/metadata-proxy/store"
+	"github.com/yunify/metad/log"
+	"github.com/yunify/metad/store"
 	"math/rand"
 	"testing"
 	"time"

@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"github.com/golang/gddo/httputil"
 	"github.com/gorilla/mux"
-	"github.com/yunify/metadata-proxy/backends"
-	"github.com/yunify/metadata-proxy/log"
-	"github.com/yunify/metadata-proxy/metadata"
+	"github.com/yunify/metad/backends"
+	"github.com/yunify/metad/log"
+	"github.com/yunify/metad/metadata"
 	yaml "gopkg.in/yaml.v2"
 	"io"
 	"net"
@@ -56,7 +56,7 @@ func main() {
 		os.Exit(-1)
 	}
 
-	log.Info("Starting metadata-proxy %s", VERSION)
+	log.Info("Starting metad %s", VERSION)
 	var err error
 	storeClient, err = backends.New(backendsConfig)
 	if err != nil {

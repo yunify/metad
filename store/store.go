@@ -2,8 +2,8 @@ package store
 
 import (
 	"fmt"
-	"github.com/yunify/metadata-proxy/util"
-	"github.com/yunify/metadata-proxy/util/flatmap"
+	"github.com/yunify/metad/util"
+	"github.com/yunify/metad/util/flatmap"
 	"path"
 	"reflect"
 	"strings"

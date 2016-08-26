@@ -1,4 +1,4 @@
-# etcd v2 metadata-proxy demo
+# etcd v2 metad demo
 
 * start etcd
 
@@ -6,10 +6,10 @@
 etcd
 ```
 
-* start metadata-proxy
+* start metad
 
 ```
-bin/metadata-proxy --backend etcd --nodes 127.0.0.1:2379 --log_level debug --listen :8080 --xff true
+bin/metad --backend etcd --nodes 127.0.0.1:2379 --log_level debug --listen :8080 --xff true
 ```
 
 * fill data to etcd
@@ -170,7 +170,7 @@ curl "http://127.0.0.1:2379/v2/keys/?recursive=true"
 }
 ```
 
-by metadata-proxy text output
+by metad text output
 
 ```
 curl http://127.0.0.1:8080/
@@ -178,7 +178,7 @@ curl http://127.0.0.1:8080/
 nodes/
 ```
 
-by metadata-proxy json output
+by metad json output
 
 ```
 curl -H "Accept: application/json" http://127.0.0.1:8080/
@@ -209,7 +209,7 @@ curl -H "Accept: application/json" http://127.0.0.1:8080/
 }
 ```
 
-by metadata-proxy yaml output
+by metad yaml output
 
 ```
 curl -H "Accept: application/yaml" http://127.0.0.1:8080/

@@ -2,10 +2,10 @@ package backends
 
 import (
 	"errors"
-	"github.com/yunify/metadata-proxy/backends/etcd"
-	"github.com/yunify/metadata-proxy/backends/etcdv3"
-	"github.com/yunify/metadata-proxy/log"
-	"github.com/yunify/metadata-proxy/store"
+	"github.com/yunify/metad/backends/etcd"
+	"github.com/yunify/metad/backends/etcdv3"
+	"github.com/yunify/metad/log"
+	"github.com/yunify/metad/store"
 	"strings"
 )
 

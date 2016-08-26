@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
 
-echo "Building metadata-proxy..."
+echo "Building metad ..."
 mkdir -p bin
-go build -o bin/metadata-proxy .
+go build -o bin/metad .

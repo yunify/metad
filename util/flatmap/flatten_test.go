@@ -3,7 +3,7 @@ package flatmap
 import (
 	"encoding/json"
 	"github.com/stretchr/testify/assert"
-	"github.com/yunify/metadata-proxy/log"
+	"github.com/yunify/metad/log"
 	"reflect"
 	"testing"
 )

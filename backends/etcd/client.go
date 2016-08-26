@@ -5,10 +5,10 @@ import (
 	"crypto/x509"
 	"fmt"
 	"github.com/coreos/etcd/client"
-	"github.com/yunify/metadata-proxy/log"
-	"github.com/yunify/metadata-proxy/store"
-	"github.com/yunify/metadata-proxy/util"
-	"github.com/yunify/metadata-proxy/util/flatmap"
+	"github.com/yunify/metad/log"
+	"github.com/yunify/metad/store"
+	"github.com/yunify/metad/util"
+	"github.com/yunify/metad/util/flatmap"
 	"golang.org/x/net/context"
 	"io/ioutil"
 	"net"
@@ -18,7 +18,7 @@ import (
 	"time"
 )
 
-const SELF_MAPPING_PATH = "/_metadata-proxy/mapping"
+const SELF_MAPPING_PATH = "/_metad/mapping"
 
 // Client is a wrapper around the etcd client
 type Client struct {

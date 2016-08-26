@@ -2,9 +2,9 @@ package metadata
 
 import (
 	"errors"
-	"github.com/yunify/metadata-proxy/backends"
-	"github.com/yunify/metadata-proxy/log"
-	"github.com/yunify/metadata-proxy/store"
+	"github.com/yunify/metad/backends"
+	"github.com/yunify/metad/log"
+	"github.com/yunify/metad/store"
 	"net"
 	"path"
 	"reflect"

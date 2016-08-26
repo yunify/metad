@@ -1,7 +1,7 @@
 package flatmap
 
 import (
-	"github.com/yunify/metadata-proxy/log"
+	"github.com/yunify/metad/log"
 	"path"
 	"strings"
 )
