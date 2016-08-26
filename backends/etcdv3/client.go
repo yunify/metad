@@ -81,16 +81,58 @@ func NewEtcdClient(prefix string, machines []string, cert, key, caCert string, b
 	return &Client{c, prefix}, nil
 }
 
-// GetValues queries etcd for nodePath prefix.
-func (c *Client) GetValues(nodePath string) (map[string]interface{}, error) {
-	m, err := c.internalGetValues(c.prefix, nodePath)
-	if err != nil {
-		return nil, err
+// Get queries etcd for nodePath.
+func (c *Client) Get(nodePath string, dir bool) (interface{}, error) {
+	if dir {
+		m, err := c.internalGets(c.prefix, nodePath)
+		if err != nil {
+			return nil, err
+		}
+		return flatmap.Expand(m, nodePath), nil
+	} else {
+		return c.internalGet(c.prefix, nodePath)
 	}
-	return flatmap.Expand(m, nodePath), nil
 }
 
-func (c *Client) internalGetValues(prefix, nodePath string) (map[string]string, error) {
+func (c *Client) Put(nodePath string, value interface{}, replace bool) error {
+	return c.internalPut(c.prefix, nodePath, value, replace)
+}
+
+func (c *Client) Delete(nodePath string, dir bool) error {
+	return c.internalDelete(c.prefix, nodePath, dir)
+}
+
+func (c *Client) Sync(store store.Store, stopChan chan bool) {
+	go c.internalSync(c.prefix, store, stopChan)
+}
+
+func (c *Client) GetMapping(nodePath string, dir bool) (interface{}, error) {
+	if dir {
+		m, err := c.internalGets(SELF_MAPPING_PATH, nodePath)
+		if err != nil {
+			return nil, err
+		}
+		return flatmap.Expand(m, nodePath), nil
+	} else {
+		return c.internalGet(SELF_MAPPING_PATH, nodePath)
+	}
+}
+
+func (c *Client) PutMapping(nodePath string, mapping interface{}, replace bool) error {
+	log.Debug("UpdateMapping nodePath:%s, mapping:%v, replace:%v", nodePath, mapping, replace)
+	return c.internalPut(SELF_MAPPING_PATH, nodePath, mapping, replace)
+}
+
+func (c *Client) DeleteMapping(nodePath string, dir bool) error {
+	nodePath = path.Join("/", nodePath)
+	return c.internalDelete(SELF_MAPPING_PATH, nodePath, dir)
+}
+
+func (c *Client) SyncMapping(mapping store.Store, stopChan chan bool) {
+	go c.internalSync(SELF_MAPPING_PATH, mapping, stopChan)
+}
+
+func (c *Client) internalGets(prefix, nodePath string) (map[string]string, error) {
 	vars := make(map[string]string)
 	resp, err := c.client.Get(context.Background(), util.AppendPathPrefix(nodePath, prefix), client.WithPrefix())
 	if err != nil {
@@ -105,12 +147,7 @@ func (c *Client) internalGetValues(prefix, nodePath string) (map[string]string, 
 	return vars, nil
 }
 
-// GetValue queries etcd for nodePath
-func (c *Client) GetValue(nodePath string) (string, error) {
-	return c.internalGetValue(c.prefix, nodePath)
-}
-
-func (c *Client) internalGetValue(prefix, nodePath string) (string, error) {
+func (c *Client) internalGet(prefix, nodePath string) (string, error) {
 	resp, err := c.client.Get(context.Background(), util.AppendPathPrefix(nodePath, prefix))
 	if err != nil {
 		return "", err
@@ -129,7 +166,7 @@ func handleGetResp(prefix string, resp *client.GetResponse, vars map[string]stri
 		for _, kv := range kvs {
 			vars[util.TrimPathPrefix(string(kv.Key), prefix)] = string(kv.Value)
 		}
-		//TODO handle resp.More
+		//TODO handle resp.More for pages
 	}
 	return nil
 }
@@ -163,7 +200,7 @@ func (c *Client) internalSync(prefix string, store store.Store, stopChan chan bo
 		}()
 
 		for !inited {
-			val, err := c.internalGetValues(prefix, "/")
+			val, err := c.internalGets(prefix, "/")
 			if err != nil {
 				log.Error("GetValue from etcd nodePath:%s, error-type: %s, error: %s", prefix, reflect.TypeOf(err), err.Error())
 				time.Sleep(time.Duration(1000) * time.Millisecond)
@@ -198,34 +235,21 @@ func processSyncChange(prefix string, store store.Store, resp *client.WatchRespo
 	}
 }
 
-func (c *Client) Sync(store store.Store, stopChan chan bool) {
-	go c.internalSync(c.prefix, store, stopChan)
-}
-
-func (c *Client) Set(nodePath string, value interface{}, replace bool) error {
-	return c.internalSet(c.prefix, nodePath, value, replace)
-}
-
-func (c *Client) internalSet(prefix, nodePath string, value interface{}, replace bool) error {
+func (c *Client) internalPut(prefix, nodePath string, value interface{}, replace bool) error {
 	switch t := value.(type) {
 	case map[string]interface{}, map[string]string, []interface{}:
 		flatValues := flatmap.Flatten(t)
-		return c.internalSetValues(prefix, nodePath, flatValues, replace)
+		return c.internalPutValues(prefix, nodePath, flatValues, replace)
 	case string:
-		return c.internalSetValue(prefix, nodePath, t)
+		return c.internalPutValue(prefix, nodePath, t)
 	default:
 		log.Warning("Set unexpect value type: %s", reflect.TypeOf(value))
 		val := fmt.Sprintf("%v", t)
-		return c.internalSetValue(prefix, nodePath, val)
+		return c.internalPutValue(prefix, nodePath, val)
 	}
 }
 
-func (c *Client) SetValues(nodePath string, values map[string]interface{}, replace bool) error {
-	flatValues := flatmap.Flatten(values)
-	return c.internalSetValues(c.prefix, nodePath, flatValues, replace)
-}
-
-func (c *Client) internalSetValues(prefix string, nodePath string, values map[string]string, replace bool) error {
+func (c *Client) internalPutValues(prefix string, nodePath string, values map[string]string, replace bool) error {
 
 	new_prefix := util.AppendPathPrefix(nodePath, prefix)
 	ops := make([]client.Op, 0, len(values)+1)
@@ -259,11 +283,7 @@ func (c *Client) internalSetValues(prefix string, nodePath string, values map[st
 	return nil
 }
 
-func (c *Client) SetValue(nodePath string, value string) error {
-	return c.internalSetValue(c.prefix, nodePath, value)
-}
-
-func (c *Client) internalSetValue(prefix string, nodePath string, value string) error {
+func (c *Client) internalPutValue(prefix string, nodePath string, value string) error {
 	nodePath = util.AppendPathPrefix(nodePath, prefix)
 	resp, err := c.client.Put(context.TODO(), nodePath, value)
 	log.Debug("SetValue nodePath: %s, value:%s, resp:%v", nodePath, value, resp)
@@ -271,10 +291,6 @@ func (c *Client) internalSetValue(prefix string, nodePath string, value string) 
 		return err
 	}
 	return nil
-}
-
-func (c *Client) Delete(nodePath string, dir bool) error {
-	return c.internalDelete(c.prefix, nodePath, dir)
 }
 
 func (c *Client) internalDelete(prefix, nodePath string, dir bool) error {
@@ -290,18 +306,4 @@ func (c *Client) internalDelete(prefix, nodePath string, dir bool) error {
 		_, err = c.client.Delete(context.Background(), nodePath)
 	}
 	return err
-}
-
-func (c *Client) SyncMapping(mapping store.Store, stopChan chan bool) {
-	go c.internalSync(SELF_MAPPING_PATH, mapping, stopChan)
-}
-
-func (c *Client) UpdateMapping(nodePath string, mapping interface{}, replace bool) error {
-	log.Debug("UpdateMapping nodePath:%s, mapping:%v, replace:%v", nodePath, mapping, replace)
-	return c.internalSet(SELF_MAPPING_PATH, nodePath, mapping, replace)
-}
-
-func (c *Client) DeleteMapping(nodePath string, dir bool) error {
-	nodePath = path.Join("/", nodePath)
-	return c.internalDelete(SELF_MAPPING_PATH, nodePath, dir)
 }

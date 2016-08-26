@@ -24,7 +24,7 @@ func init() {
 	rand.Seed(int64(time.Now().Nanosecond()))
 }
 
-func TestClientGetSet(t *testing.T) {
+func TestClientGetPut(t *testing.T) {
 	for _, backend := range backendNodes {
 		println("Test backend: ", backend)
 
@@ -42,15 +42,15 @@ func TestClientGetSet(t *testing.T) {
 
 		storeClient.Delete("/", true)
 
-		err = storeClient.SetValue("testkey", "testvalue")
+		err = storeClient.Put("testkey", "testvalue", false)
 		assert.NoError(t, err)
 
-		val, getErr := storeClient.GetValue("testkey")
+		val, getErr := storeClient.Get("testkey", false)
 		assert.NoError(t, getErr)
 		assert.Equal(t, "testvalue", val)
 
 		// test no exist key
-		val, getErr = storeClient.GetValue("noexistkey")
+		val, getErr = storeClient.Get("noexistkey", false)
 		assert.NoError(t, getErr)
 		assert.Equal(t, "", val)
 
@@ -58,7 +58,7 @@ func TestClientGetSet(t *testing.T) {
 	}
 }
 
-func TestClientGetsSets(t *testing.T) {
+func TestClientGetsPuts(t *testing.T) {
 	for _, backend := range backendNodes {
 		println("Test backend: ", backend)
 
@@ -83,10 +83,10 @@ func TestClientGetsSets(t *testing.T) {
 			},
 		}
 
-		err = storeClient.SetValues("testkey", values, true)
+		err = storeClient.Put("testkey", values, true)
 		assert.NoError(t, err)
 
-		val, getErr := storeClient.GetValues("testkey")
+		val, getErr := storeClient.Get("testkey", true)
 		assert.NoError(t, getErr)
 		assert.Equal(t, values, val)
 
@@ -98,7 +98,7 @@ func TestClientGetsSets(t *testing.T) {
 			},
 		}
 
-		err = storeClient.SetValues("testkey", values2, false)
+		err = storeClient.Put("testkey", values2, false)
 		assert.NoError(t, err)
 
 		values3 := map[string]interface{}{
@@ -109,16 +109,16 @@ func TestClientGetsSets(t *testing.T) {
 			},
 		}
 
-		val, getErr = storeClient.GetValues("testkey")
+		val, getErr = storeClient.Get("testkey", true)
 		assert.NoError(t, getErr)
 		assert.Equal(t, values3, val)
 
 		//test replace
 
-		err = storeClient.SetValues("testkey", values2, true)
+		err = storeClient.Put("testkey", values2, true)
 		assert.NoError(t, err)
 
-		val, getErr = storeClient.GetValues("testkey")
+		val, getErr = storeClient.Get("testkey", true)
 		assert.NoError(t, getErr)
 		assert.Equal(t, values2, val)
 
@@ -126,7 +126,7 @@ func TestClientGetsSets(t *testing.T) {
 	}
 }
 
-func TestClientSet(t *testing.T) {
+func TestClientPutJSON(t *testing.T) {
 	for _, backend := range backendNodes {
 		println("Test backend: ", backend)
 
@@ -156,10 +156,10 @@ func TestClientSet(t *testing.T) {
 		err = json.Unmarshal(jsonVal, &values)
 		assert.NoError(t, err)
 
-		err = storeClient.Set("testkey", values, true)
+		err = storeClient.Put("testkey", values, true)
 		assert.NoError(t, err)
 
-		val, getErr := storeClient.GetValues("testkey")
+		val, getErr := storeClient.Get("testkey", true)
 		assert.NoError(t, getErr)
 		assert.Equal(t, values, val)
 
@@ -177,7 +177,7 @@ func TestClientSet(t *testing.T) {
 		err = json.Unmarshal(jsonVal2, &values2)
 		assert.NoError(t, err)
 
-		err = storeClient.Set("testkey", values2, false)
+		err = storeClient.Put("testkey", values2, false)
 		assert.NoError(t, err)
 
 		values3 := map[string]interface{}{
@@ -188,16 +188,16 @@ func TestClientSet(t *testing.T) {
 			},
 		}
 
-		val, getErr = storeClient.GetValues("testkey")
+		val, getErr = storeClient.Get("testkey", true)
 		assert.NoError(t, getErr)
 		assert.Equal(t, values3, val)
 
 		//test replace
 
-		err = storeClient.Set("testkey", values2, true)
+		err = storeClient.Put("testkey", values2, true)
 		assert.NoError(t, err)
 
-		val, getErr = storeClient.GetValues("testkey")
+		val, getErr = storeClient.Get("testkey", true)
 		assert.NoError(t, getErr)
 		assert.Equal(t, values2, val)
 
@@ -263,6 +263,48 @@ func TestMapping(t *testing.T) {
 
 	for _, backend := range backendNodes {
 		println("Test backend: ", backend)
+		nodes := GetDefaultBackends(backend)
+
+		config := Config{
+			Backend:      backend,
+			BackendNodes: nodes,
+			Prefix:       prefix,
+		}
+		storeClient, err := New(config)
+		assert.NoError(t, err)
+		mappings := make(map[string]interface{})
+		for i := 0; i < 10; i++ {
+			ip := fmt.Sprintf("192.168.1.%v", i)
+			mapping := map[string]string{
+				"instance": fmt.Sprintf("/instances/%v", i),
+				"config":   fmt.Sprintf("/configs/%v", i),
+			}
+			mappings[ip] = mapping
+		}
+		storeClient.PutMapping("/", mappings, true)
+
+		val, err := storeClient.GetMapping("/", true)
+		assert.NoError(t, err)
+		m, mok := val.(map[string]interface{})
+		assert.True(t, mok)
+		assert.True(t, m["192.168.1.0"] != nil)
+
+		ip := fmt.Sprintf("192.168.1.%v", 1)
+		nodePath := "/" + ip + "/" + "instance"
+		storeClient.PutMapping(nodePath, "/instances/new1", true)
+		time.Sleep(1000 * time.Millisecond)
+		val, err = storeClient.GetMapping(nodePath, false)
+		assert.NoError(t, err)
+		assert.Equal(t, "/instances/new1", val)
+	}
+}
+
+func TestMappingSync(t *testing.T) {
+
+	prefix := fmt.Sprintf("/prefix%v", rand.Intn(1000))
+
+	for _, backend := range backendNodes {
+		println("Test backend: ", backend)
 		stopChan := make(chan bool)
 		defer func() {
 			stopChan <- true
@@ -287,7 +329,7 @@ func TestMapping(t *testing.T) {
 				"instance": fmt.Sprintf("/instances/%v", i),
 				"config":   fmt.Sprintf("/configs/%v", i),
 			}
-			storeClient.UpdateMapping(ip, mapping, true)
+			storeClient.PutMapping(ip, mapping, true)
 		}
 		time.Sleep(1000 * time.Millisecond)
 		storeClient.SyncMapping(metastore, stopChan)
@@ -309,7 +351,7 @@ func TestMapping(t *testing.T) {
 				"instance": fmt.Sprintf("/instances/%v", i),
 				"config":   fmt.Sprintf("/configs/%v", i),
 			}
-			storeClient.UpdateMapping(ip, mapping, true)
+			storeClient.PutMapping(ip, mapping, true)
 		}
 		time.Sleep(1000 * time.Millisecond)
 		for i := 10; i < 20; i++ {
@@ -323,7 +365,7 @@ func TestMapping(t *testing.T) {
 		}
 		ip := fmt.Sprintf("192.168.1.%v", 1)
 		nodePath := ip + "/" + "instance"
-		storeClient.UpdateMapping(nodePath, "/instances/new1", true)
+		storeClient.PutMapping(nodePath, "/instances/new1", true)
 		time.Sleep(1000 * time.Millisecond)
 		val, ok := metastore.Get(nodePath)
 		assert.True(t, ok)
@@ -340,7 +382,7 @@ func FillTestData(storeClient StoreClient) map[string]string {
 		}
 		testData[fmt.Sprintf("%v", i)] = ci
 	}
-	err := storeClient.SetValues("/", testData, true)
+	err := storeClient.Put("/", testData, true)
 	if err != nil {
 		log.Error("SetValues error", err.Error())
 	}
@@ -358,7 +400,7 @@ func RandomUpdate(testData map[string]string, storeClient StoreClient, times int
 		key := keys[idx]
 		val := testData[key]
 		newVal := fmt.Sprintf("%s-%v", val, 0)
-		storeClient.SetValue(key, newVal)
+		storeClient.Put(key, newVal, true)
 		testData[key] = newVal
 	}
 }

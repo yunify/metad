@@ -12,18 +12,17 @@ import (
 // The StoreClient interface is implemented by objects that can retrieve
 // key/value pairs from a backend store.
 type StoreClient interface {
-	GetValues(nodePath string) (map[string]interface{}, error)
-	GetValue(nodePath string) (string, error)
-	Sync(store store.Store, stopChan chan bool)
-	SetValues(nodePath string, values map[string]interface{}, replace bool) error
-	SetValue(nodePath string, value string) error
-	Set(nodePath string, value interface{}, replace bool) error
+	Get(nodePath string, dir bool) (interface{}, error)
+	Put(nodePath string, value interface{}, replace bool) error
 	// Delete
 	// if the 'key' represent a dir, 'dir' should be true.
 	Delete(nodePath string, dir bool) error
-	SyncMapping(mapping store.Store, stopChan chan bool)
-	UpdateMapping(nodePath string, mapping interface{}, replace bool) error
+	Sync(store store.Store, stopChan chan bool)
+
+	GetMapping(nodePath string, dir bool) (interface{}, error)
+	PutMapping(nodePath string, mapping interface{}, replace bool) error
 	DeleteMapping(nodePath string, dir bool) error
+	SyncMapping(mapping store.Store, stopChan chan bool)
 }
 
 // New is used to create a storage client based on our configuration.

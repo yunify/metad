@@ -74,16 +74,13 @@ func main() {
 	router.HandleFunc("/favicon.ico", http.NotFound)
 
 	router.HandleFunc("/self", selfHandler).
-		Methods("GET", "HEAD").
-		Name("SelfRoot")
+		Methods("GET", "HEAD")
 
 	router.HandleFunc("/self/{key:.*}", selfHandler).
-		Methods("GET", "HEAD").
-		Name("Self")
+		Methods("GET", "HEAD")
 
-	router.HandleFunc("/{key:.*}", metadataHandler).
-		Methods("GET", "HEAD").
-		Name("Metadata")
+	router.HandleFunc("/{key:.*}", rootHandler).
+		Methods("GET", "HEAD")
 
 	log.Info("Listening on %s", config.Listen)
 	log.Fatal("%v", http.ListenAndServe(config.Listen, router))
@@ -205,7 +202,7 @@ func dataUpdate(w http.ResponseWriter, req *http.Request) {
 		// POST means replace old value
 		// PUT means merge to old value
 		replace := "POST" == strings.ToUpper(req.Method)
-		err = metadataRepo.UpdateData(nodePath, data, replace)
+		err = metadataRepo.PutData(nodePath, data, replace)
 		if err != nil {
 			msg := fmt.Sprintf("Update data error:%s", err.Error())
 			log.Error("dataUpdate  nodePath:%s, data:%v, error:%s", nodePath, data, err.Error())
@@ -270,7 +267,7 @@ func mappingUpdate(w http.ResponseWriter, req *http.Request) {
 		// POST means replace old value
 		// PUT means merge to old value
 		replace := "POST" == strings.ToUpper(req.Method)
-		err = metadataRepo.UpdateMapping(nodePath, data, replace)
+		err = metadataRepo.PutMapping(nodePath, data, replace)
 		if err != nil {
 			msg := fmt.Sprintf("Update mapping error:%s", err.Error())
 			log.Error("mappingUpdate  nodePath:%s, data:%v, error:%s", nodePath, data, err.Error())
@@ -323,12 +320,12 @@ func contentType(req *http.Request) int {
 	}
 }
 
-func metadataHandler(w http.ResponseWriter, req *http.Request) {
+func rootHandler(w http.ResponseWriter, req *http.Request) {
 	clientIP := requestIP(req)
 	requestPath := req.URL.EscapedPath() //strings.TrimRight(req.URL.EscapedPath()[1:], "/")
 	log.Debug("clientIP: %s, requestPath: %s", clientIP, requestPath)
 
-	val, ok := metadataRepo.Get(clientIP, requestPath)
+	val, ok := metadataRepo.Root(clientIP, requestPath)
 	if !ok {
 		log.Warning("%s not found %s", requestPath, clientIP)
 		respondError(w, req, "Not found", http.StatusNotFound)
@@ -343,7 +340,7 @@ func selfHandler(w http.ResponseWriter, req *http.Request) {
 	clientIP := requestIP(req)
 	requestPath := strings.TrimLeft(req.URL.EscapedPath(), "/self")
 
-	val, ok := metadataRepo.GetSelf(clientIP, requestPath)
+	val, ok := metadataRepo.Self(clientIP, requestPath)
 	if !ok {
 		log.Warning("self not found %s", clientIP)
 		respondError(w, req, "Not found", http.StatusNotFound)

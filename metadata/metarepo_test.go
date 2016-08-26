@@ -45,7 +45,7 @@ func TestMetarepoData(t *testing.T) {
 	time.Sleep(1000 * time.Millisecond)
 	ValidTestData(t, testData, metarepo.data)
 
-	val, ok := metarepo.Get("192.168.0.1", "/nodes/0")
+	val, ok := metarepo.Root("192.168.0.1", "/nodes/0")
 	assert.True(t, ok)
 	assert.NotNil(t, val)
 
@@ -113,7 +113,7 @@ func TestMetarepoMapping(t *testing.T) {
 		mappings[ip] = mapping
 	}
 	// batch update
-	err = metarepo.UpdateMapping("/", mappings, true)
+	err = metarepo.PutMapping("/", mappings, true)
 	assert.NoError(t, err)
 	time.Sleep(1000 * time.Millisecond)
 
@@ -176,7 +176,7 @@ func TestMetarepoSelf(t *testing.T) {
 		mappings[ip] = mapping
 	}
 	// batch update
-	err = metarepo.UpdateMapping("/", mappings, true)
+	err = metarepo.PutMapping("/", mappings, true)
 	assert.NoError(t, err)
 	time.Sleep(1000 * time.Millisecond)
 
@@ -190,13 +190,13 @@ func TestMetarepoSelf(t *testing.T) {
 	p := rand.Intn(maxNode)
 	ip := fmt.Sprintf("192.168.1.%v", p)
 
-	val, ok := metarepo.GetSelf(ip, "/")
+	val, ok := metarepo.Self(ip, "/")
 	mapVal, mok := val.(map[string]interface{})
 
 	assert.True(t, mok)
 	assert.NotNil(t, mapVal[key])
 
-	val, ok = metarepo.GetSelf(ip, "/node/name")
+	val, ok = metarepo.Self(ip, "/node/name")
 	assert.True(t, ok)
 	assert.Equal(t, fmt.Sprintf("node%v", p), val)
 
@@ -208,7 +208,7 @@ func TestMetarepoSelf(t *testing.T) {
 		metarepo.ReSync()
 	}
 	time.Sleep(1000 * time.Millisecond)
-	val, ok = metarepo.GetSelf(ip, "/node/name")
+	val, ok = metarepo.Self(ip, "/node/name")
 	assert.False(t, ok)
 	assert.Nil(t, val)
 
@@ -218,7 +218,7 @@ func TestMetarepoSelf(t *testing.T) {
 	}
 
 	// test update replace(false)
-	err = metarepo.UpdateMapping(ip, map[string]interface{}{"node2": "/nodes/2"}, false)
+	err = metarepo.PutMapping(ip, map[string]interface{}{"node2": "/nodes/2"}, false)
 	assert.NoError(t, err)
 
 	expectMapping1 := map[string]interface{}{
@@ -232,7 +232,7 @@ func TestMetarepoSelf(t *testing.T) {
 	assert.Equal(t, expectMapping1, mapping)
 
 	// test update key
-	err = metarepo.UpdateMapping(ip+"/node3", "/nodes/3", false)
+	err = metarepo.PutMapping(ip+"/node3", "/nodes/3", false)
 	assert.NoError(t, err)
 
 	expectMapping2 := map[string]interface{}{
@@ -254,7 +254,7 @@ func TestMetarepoSelf(t *testing.T) {
 	assert.Equal(t, expectMapping1, mapping)
 
 	// test update replace(true)
-	err = metarepo.UpdateMapping(ip, expectMapping0, true)
+	err = metarepo.PutMapping(ip, expectMapping0, true)
 	assert.NoError(t, err)
 	time.Sleep(1000 * time.Millisecond)
 	mapping, ok = metarepo.GetMapping(fmt.Sprintf("/%s", ip))
@@ -292,11 +292,11 @@ func TestMetarepoRoot(t *testing.T) {
 	ip := "192.168.1.0"
 	mapping := make(map[string]interface{})
 	mapping["node"] = "/nodes/0"
-	err = metarepo.UpdateMapping(ip, mapping, true)
+	err = metarepo.PutMapping(ip, mapping, true)
 	assert.NoError(t, err)
 
 	time.Sleep(1000 * time.Millisecond)
-	val, ok := metarepo.Get(ip, "/")
+	val, ok := metarepo.Root(ip, "/")
 	assert.True(t, ok)
 	mapVal, mok := val.(map[string]interface{})
 	assert.True(t, mok)
@@ -306,7 +306,7 @@ func TestMetarepoRoot(t *testing.T) {
 
 	metarepo.SetOnlySelf(true)
 
-	val, ok = metarepo.Get(ip, "/")
+	val, ok = metarepo.Root(ip, "/")
 	mapVal = val.(map[string]interface{})
 	selfVal = mapVal["self"]
 	assert.NotNil(t, selfVal)
@@ -327,7 +327,7 @@ func FillTestData(metarepo *MetadataRepo) map[string]string {
 	testData := map[string]interface{}{
 		"nodes": nodes,
 	}
-	err := metarepo.UpdateData("/", testData, true)
+	err := metarepo.PutData("/", testData, true)
 	if err != nil {
 		log.Error("SetValues error", err.Error())
 		panic(err)

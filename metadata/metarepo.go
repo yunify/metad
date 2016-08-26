@@ -65,14 +65,14 @@ func (r *MetadataRepo) StopSync() {
 	r.mappingStopChan <- true
 }
 
-func (r *MetadataRepo) Get(clientIP string, metapath string) (interface{}, bool) {
+func (r *MetadataRepo) Root(clientIP string, metapath string) (interface{}, bool) {
 	log.Debug("Get clientIP:%s metapath:%s", clientIP, metapath)
 
 	metapath = path.Clean(path.Join("/", metapath))
 	if r.onlySelf {
 		if metapath == "/" {
 			val := make(map[string]interface{})
-			selfVal, ok := r.GetSelf(clientIP, "/")
+			selfVal, ok := r.Self(clientIP, "/")
 			if ok {
 				val["self"] = selfVal
 			}
@@ -86,7 +86,7 @@ func (r *MetadataRepo) Get(clientIP string, metapath string) (interface{}, bool)
 			return nil, false
 		} else {
 			if metapath == "/" {
-				selfVal, ok := r.GetSelf(clientIP, "/")
+				selfVal, ok := r.Self(clientIP, "/")
 				if ok {
 					mapVal, ok := val.(map[string]interface{})
 					if ok {
@@ -99,10 +99,10 @@ func (r *MetadataRepo) Get(clientIP string, metapath string) (interface{}, bool)
 	}
 }
 
-func (r *MetadataRepo) GetSelf(clientIP string, metapath string) (interface{}, bool) {
+func (r *MetadataRepo) Self(clientIP string, metapath string) (interface{}, bool) {
 	metapath = path.Clean(path.Join("/", metapath))
 	log.Debug("GetSelf clientIP:%s metapath:%s", clientIP, metapath)
-	mapping, ok := r.SelfMapping(clientIP)
+	mapping, ok := r.getIPMapping(clientIP)
 	if !ok {
 		log.Warning("Can not find mapping for %s", clientIP)
 		return nil, false
@@ -137,7 +137,7 @@ func (r *MetadataRepo) GetSelf(clientIP string, metapath string) (interface{}, b
 	}
 }
 
-func (r *MetadataRepo) SelfMapping(clientIP string) (map[string]string, bool) {
+func (r *MetadataRepo) getIPMapping(clientIP string) (map[string]string, bool) {
 	mappingVal, ok := r.mapping.Get(clientIP)
 	if !ok {
 		return nil, false
@@ -158,8 +158,8 @@ func (r *MetadataRepo) GetData(nodePath string) (interface{}, bool) {
 	return r.data.Get(nodePath)
 }
 
-func (r *MetadataRepo) UpdateData(nodePath string, data interface{}, replace bool) error {
-	return r.storeClient.Set(nodePath, data, replace)
+func (r *MetadataRepo) PutData(nodePath string, data interface{}, replace bool) error {
+	return r.storeClient.Put(nodePath, data, replace)
 }
 
 func (r *MetadataRepo) DeleteData(nodePath string, subs ...string) error {
@@ -196,7 +196,7 @@ func (r *MetadataRepo) GetMapping(nodePath string) (interface{}, bool) {
 	return r.mapping.Get(nodePath)
 }
 
-func (r *MetadataRepo) UpdateMapping(nodePath string, data interface{}, replace bool) error {
+func (r *MetadataRepo) PutMapping(nodePath string, data interface{}, replace bool) error {
 	nodePath = path.Join("/", nodePath)
 	if nodePath == "/" {
 		m, ok := data.(map[string]interface{})
@@ -238,7 +238,7 @@ func (r *MetadataRepo) UpdateMapping(nodePath string, data interface{}, replace 
 			}
 		}
 	}
-	return r.storeClient.UpdateMapping(nodePath, data, replace)
+	return r.storeClient.PutMapping(nodePath, data, replace)
 }
 
 func (r *MetadataRepo) DeleteMapping(nodePath string, subs ...string) error {
