@@ -206,7 +206,7 @@ func (c *Client) internalSync(prefix string, store store.Store, stopChan chan bo
 				time.Sleep(time.Duration(1000) * time.Millisecond)
 				continue
 			}
-			store.SetBulk("/", val)
+			store.PutBulk("/", val)
 			inited = true
 		}
 		for resp := range watchChan {
@@ -224,12 +224,12 @@ func processSyncChange(prefix string, store store.Store, resp *client.WatchRespo
 		log.Debug("process sync change, event_type: %s, prefix: %v, nodePath:%v, value: %v ", event.Type, prefix, nodePath, value)
 		switch event.Type {
 		case mvccpb.PUT:
-			store.Set(nodePath, false, value)
+			store.Put(nodePath, value)
 		case mvccpb.DELETE:
 			store.Delete(nodePath)
 		default:
 			log.Warning("Unknow watch event type: %s ", event.Type)
-			store.Set(nodePath, false, value)
+			store.Put(nodePath, value)
 
 		}
 	}

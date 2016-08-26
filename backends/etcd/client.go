@@ -244,7 +244,7 @@ func (c *Client) internalSync(prefix string, store store.Store, stopChan chan bo
 				time.Sleep(time.Duration(1000) * time.Millisecond)
 				continue
 			}
-			store.SetBulk("/", val)
+			store.PutBulk("/", val)
 			inited = true
 		}
 
@@ -267,7 +267,7 @@ func processSyncChange(prefix string, store store.Store, resp *client.Response) 
 	case "delete":
 		store.Delete(nodePath)
 	default:
-		store.Set(nodePath, false, resp.Node.Value)
+		store.Put(nodePath, resp.Node.Value)
 	}
 }
 

@@ -1,19 +1,25 @@
 package store
 
 import (
+	"fmt"
 	"github.com/yunify/metadata-proxy/util"
 	"github.com/yunify/metadata-proxy/util/flatmap"
 	"path"
+	"reflect"
 	"strings"
 	"sync"
 )
 
 type Store interface {
+	// Get
+	// return a string (nodePath is a leaf node) or
+	// a map[string]interface{} (nodePath is dir)
 	Get(nodePath string) (interface{}, bool)
-	Set(nodePath string, dir bool, value string)
-	Sets(nodePath string, values map[string]interface{})
+	// Put value can be a map[string]interface{} or string
+	Put(nodePath string, value interface{})
 	Delete(nodePath string)
-	SetBulk(nodePath string, value map[string]string)
+	// PutBulk value should be a flatmap
+	PutBulk(nodePath string, value map[string]string)
 }
 
 type store struct {
@@ -48,35 +54,27 @@ func (s *store) Get(nodePath string) (interface{}, bool) {
 	return nil, false
 }
 
-// Set creates or replace the node at nodePath, return old value
-func (s *store) Set(nodePath string, dir bool, value string) {
+// Put creates or update the node at nodePath, value should a map[string]interface{} or a string
+func (s *store) Put(nodePath string, value interface{}) {
 	nodePath = path.Clean(path.Join("/", nodePath))
 
 	s.worldLock.Lock()
 	defer s.worldLock.Unlock()
-	s.internalSet(nodePath, dir, value)
-}
-
-func (s *store) SetBulk(nodePath string, values map[string]string) {
-	s.worldLock.Lock()
-	defer s.worldLock.Unlock()
-	s.internalSetBulk(nodePath, values)
-}
-
-func (s *store) internalSetBulk(nodePath string, values map[string]string) {
-	for k, v := range values {
-		key := util.AppendPathPrefix(k, nodePath)
-		s.internalSet(key, false, v)
+	switch t := value.(type) {
+	case map[string]interface{}, map[string]string, []interface{}:
+		flatValues := flatmap.Flatten(t)
+		s.internalPutBulk(nodePath, flatValues)
+	case string:
+		s.internalPut(nodePath, t)
+	default:
+		panic(fmt.Sprintf("Unsupport type: %s", reflect.TypeOf(t)))
 	}
 }
 
-func (s *store) Sets(nodePath string, values map[string]interface{}) {
-	nodePath = path.Clean(path.Join("/", nodePath))
-
+func (s *store) PutBulk(nodePath string, values map[string]string) {
 	s.worldLock.Lock()
 	defer s.worldLock.Unlock()
-	flatValues := flatmap.Flatten(values)
-	s.internalSetBulk(nodePath, flatValues)
+	s.internalPutBulk(nodePath, values)
 }
 
 // Delete deletes the node at the given path.
@@ -120,7 +118,7 @@ func (s *store) walk(nodePath string, walkFunc func(prev *node, component string
 	return curr
 }
 
-func (s *store) internalSet(nodePath string, dir bool, value string) *node {
+func (s *store) internalPut(nodePath string, value string) *node {
 
 	dirName, nodeName := path.Split(nodePath)
 
@@ -130,24 +128,21 @@ func (s *store) internalSet(nodePath string, dir bool, value string) *node {
 
 	// force will try to replace an existing file
 	if n != nil {
-		if dir {
-			n.AsDir()
-		}
 		n.value = value
 		return n
 	}
 
-	if !dir { // create file
-
-		n = newKV(s, nodePath, value, d)
-	} else { // create directory
-
-		n = newDir(s, nodePath, d)
-	}
-
+	n = newKV(s, nodePath, value, d)
 	d.Add(n)
 
 	return n
+}
+
+func (s *store) internalPutBulk(nodePath string, values map[string]string) {
+	for k, v := range values {
+		key := util.AppendPathPrefix(k, nodePath)
+		s.internalPut(key, v)
+	}
 }
 
 // InternalGet gets the node of the given nodePath.
