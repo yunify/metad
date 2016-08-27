@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"github.com/yunify/metad/log"
 	"reflect"
+	"strconv"
 )
 
 // Flatten takes a structure and turns into a flat map[string]string.
@@ -75,10 +76,11 @@ func flatten(result map[string]string, prefix string, v reflect.Value) {
 			}
 		case reflect.Int:
 			result[prefix] = fmt.Sprintf("%v", v.Int())
+		case reflect.Int64:
+			result[prefix] = fmt.Sprintf("%v", v.Int())
 		case reflect.Float64:
-			result[prefix] = fmt.Sprintf("%v", v.Float())
-		case reflect.Float32:
-			result[prefix] = fmt.Sprintf("%v", v.Float())
+			s := strconv.FormatFloat(v.Float(), 'f', -1, 64)
+			result[prefix] = s
 		case reflect.Map:
 			flattenMap(result, prefix, v)
 		case reflect.Slice:

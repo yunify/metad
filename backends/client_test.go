@@ -169,7 +169,10 @@ func TestClientPutJSON(t *testing.T) {
 			{"subkey1":
 				{
 					"subkey1sub3":"subsubvalue3"
-				}
+				},
+			 "int":9663676416,
+			 "bool":true,
+			 "float":1.1111111
 			}
 		`)
 
@@ -186,6 +189,9 @@ func TestClientPutJSON(t *testing.T) {
 				"subkey1sub2": "subsubvalue2",
 				"subkey1sub3": "subsubvalue3",
 			},
+			"int":   "9663676416",
+			"bool":  "true",
+			"float": "1.1111111",
 		}
 
 		val, getErr = storeClient.Get("testkey", true)
@@ -197,9 +203,18 @@ func TestClientPutJSON(t *testing.T) {
 		err = storeClient.Put("testkey", values2, true)
 		assert.NoError(t, err)
 
+		values4 := map[string]interface{}{
+			"subkey1": map[string]interface{}{
+				"subkey1sub3": "subsubvalue3",
+			},
+			"int":   "9663676416",
+			"bool":  "true",
+			"float": "1.1111111",
+		}
+
 		val, getErr = storeClient.Get("testkey", true)
 		assert.NoError(t, getErr)
-		assert.Equal(t, values2, val)
+		assert.Equal(t, values4, val)
 
 		assert.NoError(t, storeClient.Delete("/", true))
 	}

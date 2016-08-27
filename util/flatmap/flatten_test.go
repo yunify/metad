@@ -178,7 +178,9 @@ func TestFlattenJSON(t *testing.T) {
           			"labels": {"key":"value","key2":"value2"},
           			"ips": [
             				"10.42.185.183"
-          			]
+          			],
+          			"int":9663676416,
+				"float":1.1111111
         			}
         		    }
         		}
@@ -192,6 +194,8 @@ func TestFlattenJSON(t *testing.T) {
 				"/hosts/host1/labels/key":   "value",
 				"/hosts/host1/labels/key2":  "value2",
 				"/hosts/host1/ips/0":        "10.42.185.183",
+				"/hosts/host1/int":          "9663676416",
+				"/hosts/host1/float":        "1.1111111",
 			},
 		},
 	}
@@ -210,18 +214,4 @@ func TestFlattenJSON(t *testing.T) {
 				tc.Output)
 		}
 	}
-}
-
-func TestFlattenType(t *testing.T) {
-	//m1 := map[string]string{
-	//	"foo":"bar",
-	//}
-	//
-	//m2 := map[interface{}]interface{}{
-	//	"foo":"bar",
-	//}
-	//
-	//m3 := map[string]interface{}{
-	//	"foo":"bar",
-	//}
 }
