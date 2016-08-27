@@ -1,5 +1,7 @@
-# metad
+metad
+=====
 
+[![Build Status](https://travis-ci.org/yunify/metad.svg?branch=master)](https://travis-ci.org/yunify/metad)
 
 `metad` is a metadata server support the following features:
 

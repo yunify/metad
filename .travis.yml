@@ -5,4 +5,4 @@ go:
 - tip
 install:
 script:
-- go test -v -race ./...
+- ./build
