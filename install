@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+
+BIN_DIR=${BIN_DIR:-/usr/local/bin}
+INSTALL=install
+
+echo "Installing metad to $BIN_DIR/metad..."
+$INSTALL -c bin/metad $BIN_DIR/metad
