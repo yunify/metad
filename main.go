@@ -76,10 +76,10 @@ func main() {
 	router.HandleFunc("/self", selfHandler).
 		Methods("GET", "HEAD")
 
-	router.HandleFunc("/self/{key:.*}", selfHandler).
+	router.HandleFunc("/self/{nodePath:.*}", selfHandler).
 		Methods("GET", "HEAD")
 
-	router.HandleFunc("/{key:.*}", rootHandler).
+	router.HandleFunc("/{nodePath:.*}", rootHandler).
 		Methods("GET", "HEAD")
 
 	log.Info("Listening on %s", config.Listen)
@@ -322,15 +322,17 @@ func contentType(req *http.Request) int {
 
 func rootHandler(w http.ResponseWriter, req *http.Request) {
 	clientIP := requestIP(req)
-	requestPath := req.URL.EscapedPath() //strings.TrimRight(req.URL.EscapedPath()[1:], "/")
-	log.Debug("clientIP: %s, requestPath: %s", clientIP, requestPath)
-
-	val, ok := metadataRepo.Root(clientIP, requestPath)
+	vars := mux.Vars(req)
+	nodePath := vars["nodePath"]
+	if nodePath == "" {
+		nodePath = "/"
+	}
+	val, ok := metadataRepo.Root(clientIP, nodePath)
 	if !ok {
-		log.Warning("%s not found %s", requestPath, clientIP)
+		log.Warning("%s not found %s", nodePath, clientIP)
 		respondError(w, req, "Not found", http.StatusNotFound)
 	} else {
-		log.Info("%s %s OK", requestPath, clientIP)
+		log.Info("%s %s OK", nodePath, clientIP)
 		respondSuccess(w, req, val)
 	}
 
@@ -338,14 +340,17 @@ func rootHandler(w http.ResponseWriter, req *http.Request) {
 
 func selfHandler(w http.ResponseWriter, req *http.Request) {
 	clientIP := requestIP(req)
-	requestPath := strings.TrimLeft(req.URL.EscapedPath(), "/self")
-
-	val, ok := metadataRepo.Self(clientIP, requestPath)
+	vars := mux.Vars(req)
+	nodePath := vars["nodePath"]
+	if nodePath == "" {
+		nodePath = "/"
+	}
+	val, ok := metadataRepo.Self(clientIP, nodePath)
 	if !ok {
-		log.Warning("self not found %s", clientIP)
+		log.Warning("self not found clientIP:%s, requestPath:%s", clientIP, nodePath)
 		respondError(w, req, "Not found", http.StatusNotFound)
 	} else {
-		log.Info("/self/%s %s OK", requestPath, clientIP)
+		log.Info("/self/%s %s OK", nodePath, clientIP)
 		respondSuccess(w, req, val)
 	}
 }
