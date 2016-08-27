@@ -273,11 +273,10 @@ func TestClientSync(t *testing.T) {
 }
 
 func TestMapping(t *testing.T) {
-
-	prefix := fmt.Sprintf("/prefix%v", rand.Intn(1000))
-
 	for _, backend := range backendNodes {
 		println("Test backend: ", backend)
+		prefix := fmt.Sprintf("/prefix%v", rand.Intn(1000))
+
 		nodes := GetDefaultBackends(backend)
 
 		config := Config{
@@ -311,14 +310,15 @@ func TestMapping(t *testing.T) {
 		val, err = storeClient.GetMapping(nodePath, false)
 		assert.NoError(t, err)
 		assert.Equal(t, "/instances/new1", val)
+		storeClient.Delete("/", true)
+		storeClient.DeleteMapping("/", true)
 	}
 }
 
 func TestMappingSync(t *testing.T) {
 
-	prefix := fmt.Sprintf("/prefix%v", rand.Intn(1000))
-
 	for _, backend := range backendNodes {
+		prefix := fmt.Sprintf("/prefix%v", rand.Intn(1000))
 		println("Test backend: ", backend)
 		stopChan := make(chan bool)
 		defer func() {
@@ -385,6 +385,8 @@ func TestMappingSync(t *testing.T) {
 		val, ok := metastore.Get(nodePath)
 		assert.True(t, ok)
 		assert.Equal(t, "/instances/new1", val)
+		storeClient.Delete("/", true)
+		storeClient.DeleteMapping("/", true)
 	}
 }
 

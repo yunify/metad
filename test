@@ -1,4 +1,26 @@
 #!/usr/bin/env bash
 
-echo "Running tests..."
-go test
+source ./env
+
+IGNORE_PKGS="(vendor)"
+TEST_PKGS=`find . -name \*_test.go | while read a; do dirname $a; done | sort | uniq | egrep -v "$IGNORE_PKGS" | sed "s|\./||g"`
+INTEGRATION_PKGS="(integration|contrib)"
+COVER=${COVER:-"-cover"}
+TESTABLE=`echo "$TEST_PKGS" | egrep -v "$INTEGRATION_PKGS"`
+
+if [ -z "$PKG" ]; then
+	TEST=$TESTABLE
+else
+	# strip out leading dotslashes and trailing slashes from PKG=./foo/
+	TEST=${PKG/#./}
+	TEST=${TEST/#\//}
+	TEST=${TEST/%\//}
+fi
+
+# split TEST into an array and prepend REPO_PATH to each local package
+split=(${TEST// / })
+TEST=${split[@]/#/${REPO_PATH}/}
+
+echo "Running tests... ${TEST}"
+#--race -cpu 1,2,4
+go test -timeout 3m ${COVER} -run=Test $@ ${TEST}

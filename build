@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+source ./env
+
 echo "Building metad ..."
 mkdir -p bin
 go build -o bin/metad .
