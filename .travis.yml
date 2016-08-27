@@ -1,0 +1,8 @@
+language: go
+sudo: false
+go:
+- 1.6
+- tip
+install:
+script:
+- go test -v -race ./...
