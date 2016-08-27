@@ -2,8 +2,8 @@ package main
 
 import (
 	"fmt"
-	"github.com/docker/distribution/Godeps/_workspace/src/gopkg.in/yaml.v2"
 	"github.com/stretchr/testify/assert"
+	"gopkg.in/yaml.v2"
 	"io/ioutil"
 	"testing"
 )
