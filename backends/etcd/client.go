@@ -144,7 +144,7 @@ func (c *Client) internalGets(prefix, nodePath string) (map[string]string, error
 	nodePath = util.AppendPathPrefix(nodePath, prefix)
 	resp, err := c.client.Get(context.Background(), nodePath, &client.GetOptions{
 		Recursive: true,
-		Sort:      true,
+		Sort:      false,
 		Quorum:    true,
 	})
 	if err != nil {
@@ -312,6 +312,39 @@ func (c *Client) internalPutValues(prefix string, nodePath string, values map[st
 func (c *Client) internalDelete(prefix, nodePath string, dir bool) error {
 	nodePath = util.AppendPathPrefix(nodePath, prefix)
 	log.Debug("Delete from backend, nodePath:%s, dir:%v", nodePath, dir)
-	_, err := c.client.Delete(context.Background(), nodePath, &client.DeleteOptions{Recursive: dir})
-	return err
+	// etcd v2 api does not allow delete "/"
+	if nodePath == "/" {
+		resp, err := c.client.Get(context.TODO(), "/", &client.GetOptions{
+			Sort:      false,
+			Quorum:    true,
+			Recursive: false,
+		})
+		if err != nil {
+			return err
+		}
+		node := resp.Node
+		for _, n := range node.Nodes {
+			_, err = c.client.Delete(context.TODO(), n.Key, &client.DeleteOptions{Recursive: n.Dir})
+			if err != nil {
+				switch e := err.(type) {
+				case client.Error:
+					if e.Code == client.ErrorCodeKeyNotFound {
+						continue
+					}
+				}
+				return err
+			}
+		}
+		return nil
+	} else {
+		_, err := c.client.Delete(context.TODO(), nodePath, &client.DeleteOptions{Recursive: dir})
+		switch e := err.(type) {
+		case client.Error:
+			//if nodePath of key is not exist, just ignore
+			if e.Code == client.ErrorCodeKeyNotFound {
+				return nil
+			}
+		}
+		return err
+	}
 }

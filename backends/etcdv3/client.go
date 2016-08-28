@@ -14,6 +14,7 @@ import (
 	"io/ioutil"
 	"path"
 	"reflect"
+	"strings"
 	"time"
 )
 
@@ -78,7 +79,6 @@ func NewEtcdClient(group string, prefix string, machines []string, cert, key, ca
 	if err != nil {
 		return nil, err
 	}
-
 	return &Client{c, prefix, path.Join(SELF_MAPPING_PATH, group)}, nil
 }
 
@@ -165,7 +165,13 @@ func handleGetResp(prefix string, resp *client.GetResponse, vars map[string]stri
 	if resp != nil {
 		kvs := resp.Kvs
 		for _, kv := range kvs {
-			vars[util.TrimPathPrefix(string(kv.Key), prefix)] = string(kv.Value)
+			key := string(kv.Key)
+			value := string(kv.Value)
+			// avoid output mapping config as metadata when prefix is "/"
+			if (prefix == "" || prefix == "/") && strings.HasPrefix(key, SELF_MAPPING_PATH) {
+				continue
+			}
+			vars[util.TrimPathPrefix(key, prefix)] = value
 		}
 		//TODO handle resp.More for pages
 	}
@@ -220,6 +226,12 @@ func (c *Client) internalSync(prefix string, store store.Store, stopChan chan bo
 func processSyncChange(prefix string, store store.Store, resp *client.WatchResponse) {
 	for _, event := range resp.Events {
 		nodePath := string(event.Kv.Key)
+
+		// avoid sync mapping config as metadata when prefix is "/"
+		if (prefix == "" || prefix == "/") && strings.HasPrefix(nodePath, SELF_MAPPING_PATH) {
+			continue
+		}
+
 		nodePath = util.TrimPathPrefix(nodePath, prefix)
 		value := string(event.Kv.Value)
 		log.Debug("process sync change, event_type: %s, prefix: %v, nodePath:%v, value: %v ", event.Type, prefix, nodePath, value)
@@ -299,10 +311,41 @@ func (c *Client) internalDelete(prefix, nodePath string, dir bool) error {
 	nodePath = util.AppendPathPrefix(nodePath, prefix)
 	var err error
 	if dir {
+		// etcdv3 has not dir, for avoid delete "/nodes" when delete "/node", so add "/" to dir nodePath end.
 		if nodePath[len(nodePath)-1] != '/' {
 			nodePath = nodePath + "/"
 		}
-		_, err = c.client.Delete(context.Background(), nodePath, client.WithPrefix())
+		// when delete "/", should avoid delete mapping
+		if nodePath == "/" {
+			m, gerr := c.internalGets("", "/")
+			if gerr != nil {
+				err = gerr
+			} else {
+				m2 := flatmap.Expand(m, nodePath)
+				ops := make([]client.Op, 0, len(m2))
+				for k, v := range m2 {
+					// skip metad mapping config data.
+					if k == "_metad" {
+						continue
+					}
+					key := path.Join("/", k)
+					_, dir := v.(map[string]interface{})
+					log.Debug("Delete from backend, key:%s, dir:%v", key, dir)
+					if dir {
+						ops = append(ops, client.OpDelete(key, client.WithPrefix()))
+					} else {
+						ops = append(ops, client.OpDelete(key))
+					}
+				}
+				if len(ops) != 0 {
+					txn := c.client.Txn(context.TODO())
+					txn.Then(ops...)
+					_, err = txn.Commit()
+				}
+			}
+		} else {
+			_, err = c.client.Delete(context.Background(), nodePath, client.WithPrefix())
+		}
 	} else {
 		_, err = c.client.Delete(context.Background(), nodePath)
 	}

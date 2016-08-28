@@ -40,7 +40,7 @@ func TestClientGetPut(t *testing.T) {
 		storeClient, err := New(config)
 		assert.NoError(t, err)
 
-		storeClient.Delete("/", true)
+		assert.NoError(t, storeClient.Delete("/", true))
 
 		err = storeClient.Put("testkey", "testvalue", false)
 		assert.NoError(t, err)
@@ -74,7 +74,7 @@ func TestClientGetsPuts(t *testing.T) {
 		storeClient, err := New(config)
 		assert.NoError(t, err)
 
-		storeClient.Delete("/", true)
+		assert.NoError(t, storeClient.Delete("/", true))
 
 		values := map[string]interface{}{
 			"subkey1": map[string]interface{}{
@@ -142,7 +142,7 @@ func TestClientPutJSON(t *testing.T) {
 		storeClient, err := New(config)
 		assert.NoError(t, err)
 
-		storeClient.Delete("/", true)
+		assert.NoError(t, storeClient.Delete("/", true))
 
 		jsonVal := []byte(`
 			{"subkey1":
@@ -217,6 +217,77 @@ func TestClientPutJSON(t *testing.T) {
 		assert.Equal(t, values4, val)
 
 		assert.NoError(t, storeClient.Delete("/", true))
+	}
+}
+
+func TestClientNoPrefix(t *testing.T) {
+	for _, backend := range backendNodes {
+		println("Test backend: ", backend)
+
+		prefix := ""
+
+		stopChan := make(chan bool)
+		defer func() {
+			stopChan <- true
+		}()
+
+		nodes := GetDefaultBackends(backend)
+
+		config := Config{
+			Backend:      backend,
+			BackendNodes: nodes,
+			Prefix:       prefix,
+		}
+		storeClient, err := New(config)
+		assert.NoError(t, err)
+
+		assert.NoError(t, storeClient.Delete("/", true))
+
+		metastore := store.New()
+		storeClient.Sync(metastore, stopChan)
+
+		values := map[string]interface{}{
+			"subkey1": map[string]interface{}{
+				"subkey1sub1": "subsubvalue1",
+				"subkey1sub2": "subsubvalue2",
+			},
+		}
+
+		err = storeClient.Put("testkey", values, true)
+		assert.NoError(t, err)
+
+		val, getErr := storeClient.Get("testkey", true)
+		assert.NoError(t, getErr)
+		assert.Equal(t, values, val)
+
+		mappings := map[string]interface{}{
+			"192.168.1.1": map[string]interface{}{
+				"key": "/subkey1/subkey1sub1",
+			},
+		}
+		err = storeClient.PutMapping("/", mappings, true)
+
+		mappings2, merr := storeClient.GetMapping("/", true)
+		assert.NoError(t, merr)
+		assert.Equal(t, mappings, mappings2)
+
+		time.Sleep(1000 * time.Millisecond)
+
+		// mapping data should not sync to metadata
+		_, ok := metastore.Get("/_metad")
+		assert.False(t, ok)
+
+		assert.NoError(t, storeClient.Delete("/", true))
+		assert.NoError(t, getErr)
+
+		val, getErr = storeClient.Get("testkey", true)
+		assert.NoError(t, getErr)
+		assert.Equal(t, 0, len(val.(map[string]interface{})))
+
+		// delete data "/" should not delete mapping
+		mappings2, merr = storeClient.GetMapping("/", true)
+		assert.NoError(t, merr)
+		assert.Equal(t, mappings, mappings2)
 	}
 }
 
