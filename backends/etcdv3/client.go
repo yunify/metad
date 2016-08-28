@@ -26,12 +26,13 @@ var (
 
 // Client is a wrapper around the etcd client
 type Client struct {
-	client *client.Client
-	prefix string
+	client        *client.Client
+	prefix        string
+	mappingPrefix string
 }
 
 // NewEtcdClient returns an *etcd.Client with a connection to named machines.
-func NewEtcdClient(prefix string, machines []string, cert, key, caCert string, basicAuth bool, username string, password string) (*Client, error) {
+func NewEtcdClient(group string, prefix string, machines []string, cert, key, caCert string, basicAuth bool, username string, password string) (*Client, error) {
 	var c *client.Client
 	var err error
 
@@ -78,7 +79,7 @@ func NewEtcdClient(prefix string, machines []string, cert, key, caCert string, b
 		return nil, err
 	}
 
-	return &Client{c, prefix}, nil
+	return &Client{c, prefix, path.Join(SELF_MAPPING_PATH, group)}, nil
 }
 
 // Get queries etcd for nodePath.
@@ -108,28 +109,28 @@ func (c *Client) Sync(store store.Store, stopChan chan bool) {
 
 func (c *Client) GetMapping(nodePath string, dir bool) (interface{}, error) {
 	if dir {
-		m, err := c.internalGets(SELF_MAPPING_PATH, nodePath)
+		m, err := c.internalGets(c.mappingPrefix, nodePath)
 		if err != nil {
 			return nil, err
 		}
 		return flatmap.Expand(m, nodePath), nil
 	} else {
-		return c.internalGet(SELF_MAPPING_PATH, nodePath)
+		return c.internalGet(c.mappingPrefix, nodePath)
 	}
 }
 
 func (c *Client) PutMapping(nodePath string, mapping interface{}, replace bool) error {
 	log.Debug("UpdateMapping nodePath:%s, mapping:%v, replace:%v", nodePath, mapping, replace)
-	return c.internalPut(SELF_MAPPING_PATH, nodePath, mapping, replace)
+	return c.internalPut(c.mappingPrefix, nodePath, mapping, replace)
 }
 
 func (c *Client) DeleteMapping(nodePath string, dir bool) error {
 	nodePath = path.Join("/", nodePath)
-	return c.internalDelete(SELF_MAPPING_PATH, nodePath, dir)
+	return c.internalDelete(c.mappingPrefix, nodePath, dir)
 }
 
 func (c *Client) SyncMapping(mapping store.Store, stopChan chan bool) {
-	go c.internalSync(SELF_MAPPING_PATH, mapping, stopChan)
+	go c.internalSync(c.mappingPrefix, mapping, stopChan)
 }
 
 func (c *Client) internalGets(prefix, nodePath string) (map[string]string, error) {

@@ -85,13 +85,14 @@ func TestMetarepoData(t *testing.T) {
 func TestMetarepoMapping(t *testing.T) {
 
 	prefix := fmt.Sprintf("/prefix%v", rand.Intn(1000))
-
+	group := fmt.Sprintf("/group%v", rand.Intn(1000))
 	nodes := backends.GetDefaultBackends(backend)
 
 	config := backends.Config{
 		Backend:      backend,
 		BackendNodes: nodes,
 		Prefix:       prefix,
+		Group:        group,
 	}
 	storeClient, err := backends.New(config)
 	assert.NoError(t, err)
@@ -143,13 +144,14 @@ func TestMetarepoMapping(t *testing.T) {
 
 func TestMetarepoSelf(t *testing.T) {
 	prefix := fmt.Sprintf("/prefix%v", rand.Intn(1000))
-
+	group := fmt.Sprintf("/group%v", rand.Intn(1000))
 	nodes := backends.GetDefaultBackends(backend)
 
 	config := backends.Config{
 		Backend:      backend,
 		BackendNodes: nodes,
 		Prefix:       prefix,
+		Group:        group,
 	}
 	storeClient, err := backends.New(config)
 	assert.NoError(t, err)
@@ -268,13 +270,14 @@ func TestMetarepoSelf(t *testing.T) {
 func TestMetarepoRoot(t *testing.T) {
 
 	prefix := fmt.Sprintf("/prefix%v", rand.Intn(1000))
-
+	group := fmt.Sprintf("/group%v", rand.Intn(1000))
 	nodes := backends.GetDefaultBackends(backend)
 
 	config := backends.Config{
 		Backend:      backend,
 		BackendNodes: nodes,
 		Prefix:       prefix,
+		Group:        group,
 	}
 	storeClient, err := backends.New(config)
 	assert.NoError(t, err)

@@ -50,6 +50,7 @@ var (
 	nodes        Nodes
 	username     string
 	password     string
+	group        string
 )
 
 type Config struct {
@@ -68,6 +69,7 @@ type Config struct {
 	BackendNodes []string `yaml:"nodes"`
 	Username     string   `yaml:"username"`
 	Password     string   `yaml:"password"`
+	Group        string   `yaml:"Group"`
 }
 
 func init() {
@@ -79,6 +81,7 @@ func init() {
 	flag.BoolVar(&enableXff, "xff", false, "X-Forwarded-For header support")
 	flag.StringVar(&prefix, "prefix", "", "Default backend key prefix")
 	flag.BoolVar(&onlySelf, "only_self", false, "Only support self metadata query.")
+	flag.StringVar(&group, "group", "default", "The metad's group name, same group share same mapping config from backend.")
 	flag.StringVar(&listen, "listen", ":80", "Address to listen to (TCP)")
 	flag.StringVar(&listenManage, "listen_manage", "127.0.0.1:8112", "Address to listen to for manage requests (TCP)")
 	flag.BoolVar(&basicAuth, "basic_auth", false, "Use Basic Auth to authenticate (only used with -backend=etcd)")
@@ -96,6 +99,7 @@ func initConfig() error {
 	config = Config{
 		Backend:      "etcdv3",
 		Prefix:       "",
+		Group:        "default",
 		LogLevel:     "info",
 		Listen:       ":80",
 		ListenManage: "127.0.0.1:8112",
@@ -135,6 +139,8 @@ func initConfig() error {
 		BackendNodes: config.BackendNodes,
 		Password:     config.Password,
 		Username:     config.Username,
+		Prefix:       config.Prefix,
+		Group:        config.Group,
 	}
 	return nil
 }
@@ -174,6 +180,8 @@ func setConfigFromFlag(f *flag.Flag) {
 		config.Prefix = prefix
 	case "only_self":
 		config.OnlySelf = onlySelf
+	case "group":
+		config.Group = group
 	case "listen":
 		config.Listen = listen
 	case "listen_manage":
@@ -192,6 +200,5 @@ func setConfigFromFlag(f *flag.Flag) {
 		config.Username = username
 	case "password":
 		config.Password = password
-
 	}
 }

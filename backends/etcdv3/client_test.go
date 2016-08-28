@@ -22,7 +22,7 @@ func TestClientSyncStop(t *testing.T) {
 	stopChan := make(chan bool)
 
 	nodes := []string{"http://127.0.0.1:2379"}
-	storeClient, err := NewEtcdClient(prefix, nodes, "", "", "", false, "", "")
+	storeClient, err := NewEtcdClient("default", prefix, nodes, "", "", "", false, "", "")
 	assert.NoError(t, err)
 
 	time.Sleep(3000 * time.Millisecond)

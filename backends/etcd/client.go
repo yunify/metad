@@ -22,12 +22,13 @@ const SELF_MAPPING_PATH = "/_metad/mapping"
 
 // Client is a wrapper around the etcd client
 type Client struct {
-	client client.KeysAPI
-	prefix string
+	client        client.KeysAPI
+	prefix        string
+	mappingPrefix string
 }
 
 // NewEtcdClient returns an *etcd.Client with a connection to named machines.
-func NewEtcdClient(prefix string, machines []string, cert, key, caCert string, basicAuth bool, username string, password string) (*Client, error) {
+func NewEtcdClient(group string, prefix string, machines []string, cert, key, caCert string, basicAuth bool, username string, password string) (*Client, error) {
 	var c client.Client
 	var kapi client.KeysAPI
 	var err error
@@ -57,7 +58,7 @@ func NewEtcdClient(prefix string, machines []string, cert, key, caCert string, b
 	if caCert != "" {
 		certBytes, err := ioutil.ReadFile(caCert)
 		if err != nil {
-			return &Client{kapi, prefix}, err
+			return nil, err
 		}
 
 		caCertPool := x509.NewCertPool()
@@ -71,7 +72,7 @@ func NewEtcdClient(prefix string, machines []string, cert, key, caCert string, b
 	if cert != "" && key != "" {
 		tlsCert, err := tls.LoadX509KeyPair(cert, key)
 		if err != nil {
-			return &Client{kapi, prefix}, err
+			return nil, err
 		}
 		tlsConfig.Certificates = []tls.Certificate{tlsCert}
 	}
@@ -81,11 +82,11 @@ func NewEtcdClient(prefix string, machines []string, cert, key, caCert string, b
 
 	c, err = client.New(cfg)
 	if err != nil {
-		return &Client{kapi, prefix}, err
+		return nil, err
 	}
 
 	kapi = client.NewKeysAPI(c)
-	return &Client{kapi, prefix}, nil
+	return &Client{kapi, prefix, path.Join(SELF_MAPPING_PATH, group)}, nil
 }
 
 // Get queries etcd for nodePath. Dir for query is recursive.
@@ -115,27 +116,27 @@ func (c *Client) Sync(store store.Store, stopChan chan bool) {
 
 func (c *Client) GetMapping(nodePath string, dir bool) (interface{}, error) {
 	if dir {
-		m, err := c.internalGets(SELF_MAPPING_PATH, nodePath)
+		m, err := c.internalGets(c.mappingPrefix, nodePath)
 		if err != nil {
 			return nil, err
 		}
 		return flatmap.Expand(m, nodePath), nil
 	} else {
-		return c.internalGet(SELF_MAPPING_PATH, nodePath)
+		return c.internalGet(c.mappingPrefix, nodePath)
 	}
 }
 
 func (c *Client) PutMapping(nodePath string, mapping interface{}, replace bool) error {
-	return c.internalPut(SELF_MAPPING_PATH, nodePath, mapping, replace)
+	return c.internalPut(c.mappingPrefix, nodePath, mapping, replace)
 }
 
 func (c *Client) SyncMapping(mapping store.Store, stopChan chan bool) {
-	go c.internalSync(SELF_MAPPING_PATH, mapping, stopChan)
+	go c.internalSync(c.mappingPrefix, mapping, stopChan)
 }
 
 func (c *Client) DeleteMapping(nodePath string, dir bool) error {
 	nodePath = path.Join("/", nodePath)
-	return c.internalDelete(SELF_MAPPING_PATH, nodePath, dir)
+	return c.internalDelete(c.mappingPrefix, nodePath, dir)
 }
 
 func (c *Client) internalGets(prefix, nodePath string) (map[string]string, error) {

@@ -30,6 +30,9 @@ func New(config Config) (StoreClient, error) {
 	if config.Backend == "" {
 		config.Backend = "etcd"
 	}
+	if config.Group == "" {
+		config.Group = "default"
+	}
 	backendNodes := config.BackendNodes
 	log.Info("Backend nodes set to " + strings.Join(backendNodes, ", "))
 	if len(backendNodes) == 0 {
@@ -39,10 +42,10 @@ func New(config Config) (StoreClient, error) {
 	case "etcd":
 		// Create the etcd client upfront and use it for the life of the process.
 		// The etcdClient is an http.Client and designed to be reused.
-		return etcd.NewEtcdClient(config.Prefix, backendNodes, config.ClientCert, config.ClientKey, config.ClientCaKeys, config.BasicAuth, config.Username, config.Password)
+		return etcd.NewEtcdClient(config.Group, config.Prefix, backendNodes, config.ClientCert, config.ClientKey, config.ClientCaKeys, config.BasicAuth, config.Username, config.Password)
 	case "etcdv3":
 		// Create the etcdv3 client upfront and use it for the life of the process.
-		return etcdv3.NewEtcdClient(config.Prefix, backendNodes, config.ClientCert, config.ClientKey, config.ClientCaKeys, config.BasicAuth, config.Username, config.Password)
+		return etcdv3.NewEtcdClient(config.Group, config.Prefix, backendNodes, config.ClientCert, config.ClientKey, config.ClientCaKeys, config.BasicAuth, config.Username, config.Password)
 	}
 
 	return nil, errors.New("Invalid backend")

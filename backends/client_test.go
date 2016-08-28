@@ -276,13 +276,14 @@ func TestMapping(t *testing.T) {
 	for _, backend := range backendNodes {
 		println("Test backend: ", backend)
 		prefix := fmt.Sprintf("/prefix%v", rand.Intn(1000))
-
+		group := fmt.Sprintf("/group%v", rand.Intn(1000))
 		nodes := GetDefaultBackends(backend)
 
 		config := Config{
 			Backend:      backend,
 			BackendNodes: nodes,
 			Prefix:       prefix,
+			Group:        group,
 		}
 		storeClient, err := New(config)
 		assert.NoError(t, err)
@@ -319,6 +320,7 @@ func TestMappingSync(t *testing.T) {
 
 	for _, backend := range backendNodes {
 		prefix := fmt.Sprintf("/prefix%v", rand.Intn(1000))
+		group := fmt.Sprintf("/group%v", rand.Intn(1000))
 		println("Test backend: ", backend)
 		stopChan := make(chan bool)
 		defer func() {
@@ -330,6 +332,7 @@ func TestMappingSync(t *testing.T) {
 			Backend:      backend,
 			BackendNodes: nodes,
 			Prefix:       prefix,
+			Group:        group,
 		}
 		storeClient, err := New(config)
 		assert.NoError(t, err)
