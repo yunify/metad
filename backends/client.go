@@ -6,6 +6,7 @@ import (
 	"github.com/yunify/metad/backends/etcdv3"
 	"github.com/yunify/metad/log"
 	"github.com/yunify/metad/store"
+	"path"
 	"strings"
 )
 
@@ -33,6 +34,7 @@ func New(config Config) (StoreClient, error) {
 	if config.Group == "" {
 		config.Group = "default"
 	}
+	config.Prefix = path.Join("/", config.Prefix)
 	backendNodes := config.BackendNodes
 	log.Info("Backend nodes set to " + strings.Join(backendNodes, ", "))
 	if len(backendNodes) == 0 {

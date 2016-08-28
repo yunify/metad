@@ -16,6 +16,7 @@ func TestConfigFile(t *testing.T) {
 		EnableXff:    true,
 		Prefix:       "/users/uid1",
 		OnlySelf:     true,
+		Group:        "default",
 		Listen:       ":8080",
 		ListenManage: "127.0.0.1:8112",
 		BasicAuth:    true,

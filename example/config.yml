@@ -9,6 +9,8 @@ xff: true
 prefix: /users/uid1
 # Only support self metadata query
 only_self: false
+# The metad's group name, same group share same mapping config from backend.
+group: default
 # Address to listen to (TCP)
 listen: :80
 # Address to listen to for manage requests (TCP)

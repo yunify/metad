@@ -58,7 +58,7 @@ etcd
 * start metad
 
 ```
-bin/metad --backend etcdv3 --nodes 127.0.0.1:2379 --log_level debug --listen :8080 --xff true
+bin/metad --backend etcdv3 --nodes 127.0.0.1:2379 --log_level debug --listen :8080 --xff
 ```
 
 * set etcd version
