@@ -8,6 +8,7 @@ import (
 	"github.com/yunify/metad/store"
 	"github.com/yunify/metad/util/flatmap"
 	"math/rand"
+	"strings"
 	"testing"
 	"time"
 )
@@ -138,6 +139,58 @@ func TestMetarepoMapping(t *testing.T) {
 	_, ok = metarepo.GetMapping("/192.168.1.2")
 	assert.True(t, ok)
 
+	p := rand.Intn(maxNode)
+	ip := fmt.Sprintf("192.168.1.%v", p)
+
+	expectMapping0 := map[string]interface{}{
+		"node":  fmt.Sprintf("/nodes/%v", p),
+		"nodes": "/",
+	}
+
+	// test update replace(false)
+	err = metarepo.PutMapping(ip, map[string]interface{}{"node2": "/nodes/2"}, false)
+	assert.NoError(t, err)
+
+	expectMapping1 := map[string]interface{}{
+		"node":  fmt.Sprintf("/nodes/%v", p),
+		"nodes": "/",
+		"node2": "/nodes/2",
+	}
+	time.Sleep(1000 * time.Millisecond)
+	mapping, ok := metarepo.GetMapping(fmt.Sprintf("/%s", ip))
+	assert.True(t, ok)
+	assert.Equal(t, expectMapping1, mapping)
+
+	// test update key
+	err = metarepo.PutMapping(ip+"/node3", "/nodes/3", false)
+	assert.NoError(t, err)
+
+	expectMapping2 := map[string]interface{}{
+		"node":  fmt.Sprintf("/nodes/%v", p),
+		"nodes": "/",
+		"node2": "/nodes/2",
+		"node3": "/nodes/3",
+	}
+	time.Sleep(1000 * time.Millisecond)
+	mapping, ok = metarepo.GetMapping(fmt.Sprintf("/%s", ip))
+	assert.True(t, ok)
+	assert.Equal(t, expectMapping2, mapping)
+
+	// test delete mapping
+	metarepo.DeleteMapping(ip + "/node3")
+	time.Sleep(1000 * time.Millisecond)
+	mapping, ok = metarepo.GetMapping(fmt.Sprintf("/%s", ip))
+	assert.True(t, ok)
+	assert.Equal(t, expectMapping1, mapping)
+
+	// test update replace(true)
+	err = metarepo.PutMapping(ip, expectMapping0, true)
+	assert.NoError(t, err)
+	time.Sleep(1000 * time.Millisecond)
+	mapping, ok = metarepo.GetMapping(fmt.Sprintf("/%s", ip))
+	assert.True(t, ok)
+	assert.Equal(t, expectMapping0, mapping)
+
 	metarepo.DeleteData("/")
 	metarepo.DeleteMapping("/")
 }
@@ -214,54 +267,19 @@ func TestMetarepoSelf(t *testing.T) {
 	assert.False(t, ok)
 	assert.Nil(t, val)
 
-	expectMapping0 := map[string]interface{}{
-		"node":  fmt.Sprintf("/nodes/%v", p),
-		"nodes": "/",
-	}
+	//test mapping dir
 
-	// test update replace(false)
-	err = metarepo.PutMapping(ip, map[string]interface{}{"node2": "/nodes/2"}, false)
-	assert.NoError(t, err)
+	err = metarepo.PutMapping(ip, map[string]interface{}{
+		"dir": map[string]interface{}{
+			"n1": "/nodes/1",
+			"n2": "/nodes/2",
+		},
+	}, false)
 
-	expectMapping1 := map[string]interface{}{
-		"node":  fmt.Sprintf("/nodes/%v", p),
-		"nodes": "/",
-		"node2": "/nodes/2",
-	}
 	time.Sleep(1000 * time.Millisecond)
-	mapping, ok := metarepo.GetMapping(fmt.Sprintf("/%s", ip))
+	val, ok = metarepo.Self(ip, "/dir/n1/name")
 	assert.True(t, ok)
-	assert.Equal(t, expectMapping1, mapping)
-
-	// test update key
-	err = metarepo.PutMapping(ip+"/node3", "/nodes/3", false)
-	assert.NoError(t, err)
-
-	expectMapping2 := map[string]interface{}{
-		"node":  fmt.Sprintf("/nodes/%v", p),
-		"nodes": "/",
-		"node2": "/nodes/2",
-		"node3": "/nodes/3",
-	}
-	time.Sleep(1000 * time.Millisecond)
-	mapping, ok = metarepo.GetMapping(fmt.Sprintf("/%s", ip))
-	assert.True(t, ok)
-	assert.Equal(t, expectMapping2, mapping)
-
-	// test delete mapping
-	metarepo.DeleteMapping(ip + "/node3")
-	time.Sleep(1000 * time.Millisecond)
-	mapping, ok = metarepo.GetMapping(fmt.Sprintf("/%s", ip))
-	assert.True(t, ok)
-	assert.Equal(t, expectMapping1, mapping)
-
-	// test update replace(true)
-	err = metarepo.PutMapping(ip, expectMapping0, true)
-	assert.NoError(t, err)
-	time.Sleep(1000 * time.Millisecond)
-	mapping, ok = metarepo.GetMapping(fmt.Sprintf("/%s", ip))
-	assert.True(t, ok)
-	assert.Equal(t, expectMapping0, mapping)
+	assert.Equal(t, "node1", val)
 
 	metarepo.DeleteData("/")
 	metarepo.DeleteMapping("/")
@@ -343,4 +361,9 @@ func ValidTestData(t *testing.T, testData map[string]string, metastore store.Sto
 		storeVal, _ := metastore.Get(k)
 		assert.Equal(t, v, storeVal)
 	}
+}
+
+func TestSplit(t *testing.T) {
+	parts := strings.Split("/", "/")
+	println(fmt.Sprintf("len:%v, data:%v", len(parts), parts))
 }

@@ -2,6 +2,7 @@ package metadata
 
 import (
 	"errors"
+	"fmt"
 	"github.com/yunify/metad/backends"
 	"github.com/yunify/metad/log"
 	"github.com/yunify/metad/store"
@@ -99,59 +100,71 @@ func (r *MetadataRepo) Root(clientIP string, metapath string) (interface{}, bool
 	}
 }
 
-func (r *MetadataRepo) Self(clientIP string, metapath string) (interface{}, bool) {
-	metapath = path.Clean(path.Join("/", metapath))
-	log.Debug("GetSelf clientIP:%s metapath:%s", clientIP, metapath)
-	mapping, ok := r.getIPMapping(clientIP)
+func (r *MetadataRepo) Self(clientIP string, nodePath string) (interface{}, bool) {
+	nodePath = path.Join("/", nodePath)
+	log.Debug("Self nodePath:%s, clientIP:%s", nodePath, clientIP)
+	mappingData, ok := r.GetMapping(path.Join("/", clientIP))
 	if !ok {
 		log.Warning("Can not find mapping for %s", clientIP)
 		return nil, false
 	}
-	if metapath == "/" {
+	mapping, mok := mappingData.(map[string]interface{})
+	if !mok {
+		log.Warning("Mapping for %s is not a map, result:%v", clientIP, mappingData)
+		return nil, false
+	}
+	return r.getMappingDatas(nodePath, mapping)
+}
+
+func (r *MetadataRepo) getMappingData(nodePath, link string) (interface{}, bool) {
+	nodePath = path.Join(link, nodePath)
+	data, ok := r.data.Get(nodePath)
+	log.Debug("getMappingData %s %v", nodePath, ok)
+	return data, ok
+}
+
+func (r *MetadataRepo) getMappingDatas(nodePath string, mapping map[string]interface{}) (interface{}, bool) {
+	nodePath = path.Join("/", nodePath)
+	paths := strings.Split(nodePath, "/")[1:] // trim first blank item
+	// nodePath is "/"
+	if paths[0] == "" {
 		meta := make(map[string]interface{})
 		for k, v := range mapping {
-			subpath := path.Clean(path.Join("/", v))
-			val, getOK := r.data.Get(subpath)
-			if getOK {
-				meta[k] = val
+			submapping, isMap := v.(map[string]interface{})
+			if isMap {
+				val, getOK := r.getMappingDatas("/", submapping)
+				if getOK {
+					meta[k] = val
+				} else {
+					log.Warning("Can not get values from backend by mapping: %v", submapping)
+				}
 			} else {
-				log.Warning("Can not get values from backend by path: %s", subpath)
+				subNodePath := fmt.Sprintf("%v", v)
+				val, getOK := r.getMappingData("/", subNodePath)
+				if getOK {
+					meta[k] = val
+				} else {
+					log.Warning("Can not get values from backend by mapping: %v", subNodePath)
+				}
 			}
+
 		}
 		return meta, true
 	} else {
-		//for avoid to miss match /nodes and /node, so add "/" to end.
-		metapath = metapath + "/"
-		for k, v := range mapping {
-			keyPath := path.Clean(path.Join("/", k)) + "/"
-			if strings.HasPrefix(metapath, keyPath) {
-				metapath = path.Clean(path.Join("/", strings.TrimPrefix(metapath, keyPath)))
-				nodePath := path.Clean(path.Join("/", v, metapath))
-				result, rok := r.data.Get(nodePath)
-				log.Debug("Self key:%s, nodePath:%s, ok:%v, result:%v", keyPath, nodePath, rok, result)
-				return result, rok
+		elemName := paths[0]
+		elemValue, ok := mapping[elemName]
+		if ok {
+			submapping, isMap := elemValue.(map[string]interface{})
+			if isMap {
+				return r.getMappingDatas(path.Join(paths[1:]...), submapping)
+			} else {
+				return r.getMappingData(path.Join(paths[1:]...), fmt.Sprintf("%v", elemValue))
 			}
+		} else {
+			log.Debug("Can not find mapping for : %v, mapping:%v", nodePath, mapping)
+			return nil, false
 		}
-		log.Warning("Can not get self metadata by clientIP: %s path: %s", clientIP, metapath)
-		return nil, false
 	}
-}
-
-func (r *MetadataRepo) getIPMapping(clientIP string) (map[string]string, bool) {
-	mappingVal, ok := r.mapping.Get(clientIP)
-	if !ok {
-		return nil, false
-	}
-	mapping := make(map[string]string)
-	for k, v := range mappingVal.(map[string]interface{}) {
-		path, ok := v.(string)
-		if !ok {
-			log.Warning("self mapping value should be string : %v", v)
-			continue
-		}
-		mapping[k] = path
-	}
-	return mapping, true
 }
 
 func (r *MetadataRepo) GetData(nodePath string) (interface{}, bool) {
@@ -216,10 +229,6 @@ func (r *MetadataRepo) PutMapping(nodePath string, data interface{}, replace boo
 		}
 	} else {
 		parts := strings.Split(nodePath, "/")
-		// mapping only allow 2 level /ip/key split result  [,ip,key] len == 3
-		if len(parts) > 3 {
-			return errors.New("mapping path only support two level.")
-		}
 		ip := net.ParseIP(parts[1])
 		if ip == nil {
 			return errors.New("mapping's first level key should be ip .")
@@ -231,10 +240,18 @@ func (r *MetadataRepo) PutMapping(nodePath string, data interface{}, replace boo
 				return err
 			}
 		} else {
-			// nodePath: /ip/key
-			err := checkMappingPath(data)
-			if err != nil {
-				return err
+			// nodePath: /ip/{key:.*}
+			_, isMap := data.(map[string]interface{})
+			if isMap {
+				err := checkMapping(data)
+				if err != nil {
+					return err
+				}
+			} else {
+				err := checkMappingPath(data)
+				if err != nil {
+					return err
+				}
 			}
 		}
 	}
@@ -288,9 +305,17 @@ func checkMapping(data interface{}) error {
 		if strings.Index(k, "/") >= 0 {
 			return errors.New("mapping key should not be path.")
 		}
-		err := checkMappingPath(v)
-		if err != nil {
-			return err
+		_, isMap := v.(map[string]interface{})
+		if isMap {
+			err := checkMapping(v)
+			if err != nil {
+				return err
+			}
+		} else {
+			err := checkMappingPath(v)
+			if err != nil {
+				return err
+			}
 		}
 	}
 	return nil
