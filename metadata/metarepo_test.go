@@ -8,7 +8,6 @@ import (
 	"github.com/yunify/metad/store"
 	"github.com/yunify/metad/util/flatmap"
 	"math/rand"
-	"strings"
 	"testing"
 	"time"
 )
@@ -19,8 +18,9 @@ func init() {
 }
 
 var (
-	backend = "etcdv3"
-	maxNode = 10
+	backend   = "local"
+	maxNode   = 10
+	sleepTime = 100 * time.Millisecond
 )
 
 func TestMetarepoData(t *testing.T) {
@@ -43,7 +43,7 @@ func TestMetarepoData(t *testing.T) {
 	metarepo.StartSync()
 
 	testData := FillTestData(metarepo)
-	time.Sleep(1000 * time.Millisecond)
+	time.Sleep(sleepTime)
 	ValidTestData(t, testData, metarepo.data)
 
 	val, ok := metarepo.Root("192.168.0.1", "/nodes/0")
@@ -81,6 +81,7 @@ func TestMetarepoData(t *testing.T) {
 	assert.True(t, ok)
 
 	metarepo.DeleteData("/")
+	metarepo.StopSync()
 }
 
 func TestMetarepoMapping(t *testing.T) {
@@ -193,6 +194,7 @@ func TestMetarepoMapping(t *testing.T) {
 
 	metarepo.DeleteData("/")
 	metarepo.DeleteMapping("/")
+	metarepo.StopSync()
 }
 
 func TestMetarepoSelf(t *testing.T) {
@@ -283,6 +285,7 @@ func TestMetarepoSelf(t *testing.T) {
 
 	metarepo.DeleteData("/")
 	metarepo.DeleteMapping("/")
+	metarepo.StopSync()
 }
 
 func TestMetarepoRoot(t *testing.T) {
@@ -335,6 +338,7 @@ func TestMetarepoRoot(t *testing.T) {
 
 	metarepo.DeleteData("/")
 	metarepo.DeleteMapping("/")
+	metarepo.StopSync()
 }
 
 func FillTestData(metarepo *MetadataRepo) map[string]string {
@@ -361,9 +365,4 @@ func ValidTestData(t *testing.T, testData map[string]string, metastore store.Sto
 		storeVal, _ := metastore.Get(k)
 		assert.Equal(t, v, storeVal)
 	}
-}
-
-func TestSplit(t *testing.T) {
-	parts := strings.Split("/", "/")
-	println(fmt.Sprintf("len:%v, data:%v", len(parts), parts))
 }

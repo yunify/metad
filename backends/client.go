@@ -4,6 +4,7 @@ import (
 	"errors"
 	"github.com/yunify/metad/backends/etcd"
 	"github.com/yunify/metad/backends/etcdv3"
+	"github.com/yunify/metad/backends/local"
 	"github.com/yunify/metad/log"
 	"github.com/yunify/metad/store"
 	"path"
@@ -48,6 +49,8 @@ func New(config Config) (StoreClient, error) {
 	case "etcdv3":
 		// Create the etcdv3 client upfront and use it for the life of the process.
 		return etcdv3.NewEtcdClient(config.Group, config.Prefix, backendNodes, config.ClientCert, config.ClientKey, config.ClientCaKeys, config.BasicAuth, config.Username, config.Password)
+	case "local":
+		return local.NewLocalClient()
 	}
 
 	return nil, errors.New("Invalid backend")

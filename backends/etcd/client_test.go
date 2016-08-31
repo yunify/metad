@@ -25,8 +25,8 @@ func TestClientSyncStop(t *testing.T) {
 	storeClient, err := NewEtcdClient("default", prefix, nodes, "", "", "", false, "", "")
 	assert.NoError(t, err)
 
-	time.Sleep(3000 * time.Millisecond)
 	go func() {
+		time.Sleep(3000 * time.Millisecond)
 		stopChan <- true
 	}()
 

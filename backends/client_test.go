@@ -16,6 +16,7 @@ var (
 	backendNodes = []string{
 		"etcd",
 		"etcdv3",
+		"local",
 	}
 )
 
@@ -408,7 +409,7 @@ func TestMappingSync(t *testing.T) {
 		storeClient, err := New(config)
 		assert.NoError(t, err)
 
-		metastore := store.New()
+		mappingstore := store.New()
 
 		//for test init sync.
 
@@ -421,12 +422,12 @@ func TestMappingSync(t *testing.T) {
 			storeClient.PutMapping(ip, mapping, true)
 		}
 		time.Sleep(1000 * time.Millisecond)
-		storeClient.SyncMapping(metastore, stopChan)
+		storeClient.SyncMapping(mappingstore, stopChan)
 		time.Sleep(1000 * time.Millisecond)
 
 		for i := 0; i < 10; i++ {
 			ip := fmt.Sprintf("192.168.1.%v", i)
-			val, ok := metastore.Get(ip)
+			val, ok := mappingstore.Get(ip)
 			assert.True(t, ok)
 			mapVal, mok := val.(map[string]interface{})
 			assert.True(t, mok)
@@ -445,7 +446,7 @@ func TestMappingSync(t *testing.T) {
 		time.Sleep(1000 * time.Millisecond)
 		for i := 10; i < 20; i++ {
 			ip := fmt.Sprintf("192.168.1.%v", i)
-			val, ok := metastore.Get(ip)
+			val, ok := mappingstore.Get(ip)
 			assert.True(t, ok)
 			mapVal, mok := val.(map[string]interface{})
 			assert.True(t, mok)
@@ -456,7 +457,7 @@ func TestMappingSync(t *testing.T) {
 		nodePath := ip + "/" + "instance"
 		storeClient.PutMapping(nodePath, "/instances/new1", true)
 		time.Sleep(1000 * time.Millisecond)
-		val, ok := metastore.Get(nodePath)
+		val, ok := mappingstore.Get(nodePath)
 		assert.True(t, ok)
 		assert.Equal(t, "/instances/new1", val)
 		storeClient.Delete("/", true)
@@ -514,4 +515,34 @@ func ValidTestData(t *testing.T, testData map[string]string, metastore store.Sto
 		storeVal, _ := metastore.Get(k)
 		assert.Equal(t, v, storeVal)
 	}
+}
+
+func TestChannel(t *testing.T) {
+	ch := make(chan *store.Event, 10)
+	stopChan := make(chan bool)
+	go func() {
+		for {
+			select {
+			case e := <-ch:
+				if e == nil {
+					println("event is nil")
+				} else {
+					println(e.Action, e.Path)
+				}
+			case <-stopChan:
+				close(ch)
+				println("stop")
+				return
+			}
+		}
+	}()
+	for i := 0; i < 100; i++ {
+		ch <- &store.Event{
+			Action: "update",
+			Path:   fmt.Sprintf("/node/%v", i),
+		}
+		time.Sleep(100 * time.Millisecond)
+		ch <- nil
+	}
+	stopChan <- true
 }
