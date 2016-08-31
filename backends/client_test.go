@@ -516,33 +516,3 @@ func ValidTestData(t *testing.T, testData map[string]string, metastore store.Sto
 		assert.Equal(t, v, storeVal)
 	}
 }
-
-func TestChannel(t *testing.T) {
-	ch := make(chan *store.Event, 10)
-	stopChan := make(chan bool)
-	go func() {
-		for {
-			select {
-			case e := <-ch:
-				if e == nil {
-					println("event is nil")
-				} else {
-					println(e.Action, e.Path)
-				}
-			case <-stopChan:
-				close(ch)
-				println("stop")
-				return
-			}
-		}
-	}()
-	for i := 0; i < 100; i++ {
-		ch <- &store.Event{
-			Action: "update",
-			Path:   fmt.Sprintf("/node/%v", i),
-		}
-		time.Sleep(100 * time.Millisecond)
-		ch <- nil
-	}
-	stopChan <- true
-}

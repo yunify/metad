@@ -249,14 +249,16 @@ func (c *Client) internalSync(prefix string, store store.Store, stopChan chan bo
 			log.Info("Init store for prefix %s success.", prefix)
 			init = true
 		}
-		resp, err := watcher.Next(ctx)
-		if err != nil {
-			log.Error("Watch etcd error: %s", err.Error())
-			time.Sleep(time.Duration(1000) * time.Millisecond)
-			continue
+		for {
+			resp, err := watcher.Next(ctx)
+			if err != nil {
+				log.Error("Watch etcd error: %s", err.Error())
+				time.Sleep(time.Duration(1000) * time.Millisecond)
+				break
+			}
+			processSyncChange(prefix, store, resp)
+			waitIndex = resp.Node.ModifiedIndex
 		}
-		processSyncChange(prefix, store, resp)
-		waitIndex = resp.Node.ModifiedIndex
 	}
 }
 
