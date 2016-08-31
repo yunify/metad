@@ -8,12 +8,14 @@ const (
 type Event struct {
 	Action string `json:"action"`
 	Path   string `json:"path"`
+	Value  string `json:"value"`
 }
 
-func newEvent(action string, path string) *Event {
+func newEvent(action string, path string, value string) *Event {
 	return &Event{
 		Action: action,
 		Path:   path,
+		Value:  value,
 	}
 }
 

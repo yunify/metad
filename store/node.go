@@ -3,7 +3,7 @@ package store
 import (
 	"container/list"
 	"encoding/json"
-	"fmt"
+	"errors"
 	"path"
 )
 
@@ -21,6 +21,9 @@ type node struct {
 }
 
 func newKV(store *store, nodeName string, value string, parent *node) *node {
+	if len(nodeName) == 0 {
+		panic(errors.New("nodeName can not be emtpy."))
+	}
 	n := &node{
 		Name:     nodeName,
 		parent:   parent,
@@ -35,6 +38,9 @@ func newKV(store *store, nodeName string, value string, parent *node) *node {
 }
 
 func newDir(store *store, nodeName string, parent *node) *node {
+	if len(nodeName) == 0 {
+		panic(errors.New("nodeName can not be emtpy."))
+	}
 	n := &node{
 		Name:     nodeName,
 		parent:   parent,
@@ -77,7 +83,6 @@ func (n *node) IsDir() bool {
 // AsDir convert node to dir
 func (n *node) AsDir() {
 	if !n.IsDir() {
-		n.Value = ""
 		n.Children = make(map[string]*node)
 	}
 	// treat convert leaf to dir as a delete.
@@ -160,24 +165,10 @@ func (n *node) ChildrenCount() int {
 
 // Add function adds a node to the receiver node.
 func (n *node) Add(child *node) {
-	if n.Children == nil {
-		n.Children = make(map[string]*node)
+	if !n.IsDir() {
+		n.AsDir()
 	}
 	n.Children[child.Name] = child
-}
-
-func (n *node) AddChildren(children map[string]interface{}) {
-	for k, v := range children {
-
-		switch v := v.(type) {
-		case map[string]interface{}:
-			child := newDir(n.store, k, n)
-			child.AddChildren(v)
-		default:
-			value := fmt.Sprintf("%v", v)
-			newKV(n.store, k, value, n)
-		}
-	}
 }
 
 // Remove function remove the node.
@@ -186,8 +177,9 @@ func (n *node) Remove() bool {
 	if !n.IsDir() {
 		// do not remove node has watcher
 		if n.watchers != nil && n.watchers.Len() > 0 {
+			n.Value = ""
 			n.AsDir()
-			return false
+			return true
 		}
 		if n.parent != nil && n.parent.Children[n.Name] == n {
 			delete(n.parent.Children, n.Name)
@@ -198,6 +190,10 @@ func (n *node) Remove() bool {
 		}
 		return false
 	}
+
+	// clear value
+	n.Value = ""
+
 	// retry to remove all children
 	for _, node := range n.Children {
 		node.Remove()
@@ -254,11 +250,14 @@ func (n *node) GetValue() interface{} {
 }
 
 func (n *node) nodeEvent(action string) *Event {
-	event := newEvent(action, n.Path())
+	event := newEvent(action, n.Path(), n.Value)
 	return event
 }
 
 func (n *node) Notify(event *Event) {
+	if event == nil {
+		panic(errors.New("event can not be nil"))
+	}
 	if n.watchers != nil && n.watchers.Len() > 0 {
 		for e := n.watchers.Front(); e != nil; e = e.Next() {
 			w := e.Value.(Watcher)

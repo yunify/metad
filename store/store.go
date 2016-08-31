@@ -55,7 +55,7 @@ func (s *store) Get(nodePath string) (interface{}, bool) {
 		val := n.GetValue()
 		m, mok := val.(map[string]interface{})
 		// treat empty dir as not found result.
-		if mok && len(m) == 0 {
+		if mok && len(m) == 0 && !n.IsRoot() {
 			return nil, false
 		} else {
 			return n.GetValue(), true
@@ -106,18 +106,21 @@ func (s *store) Delete(nodePath string) {
 func (s *store) Watch(nodePath string) Watcher {
 	s.worldLock.Lock()
 	defer s.worldLock.Unlock()
+	var n *node
+	if nodePath == "/" {
+		n = s.Root
+	} else {
 
-	dirName, nodeName := path.Split(nodePath)
+		dirName, nodeName := path.Split(nodePath)
 
-	// walk through the nodePath, create dirs and get the last directory node
-	d := s.walk(dirName, s.checkDir)
-	n := d.GetChild(nodeName)
-
-	if n != nil {
-		return n.Watch()
+		// walk through the nodePath, create dirs and get the last directory node
+		d := s.walk(dirName, s.checkDir)
+		n = d.GetChild(nodeName)
+		if n == nil {
+			// if watch node not exist, create a empty dir.
+			n = newDir(s, nodeName, d)
+		}
 	}
-	// if watch node not exist, create a empty dir.
-	n = newDir(s, nodeName, d)
 	return n.Watch()
 }
 
@@ -147,6 +150,10 @@ func (s *store) walk(nodePath string, walkFunc func(prev *node, component string
 
 func (s *store) internalPut(nodePath string, value string) *node {
 
+	// nodePath is "/", just ignore put value.
+	if nodePath == "/" {
+		return s.Root
+	}
 	dirName, nodeName := path.Split(nodePath)
 
 	// walk through the nodePath, create dirs and get the last directory node
