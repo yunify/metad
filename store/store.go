@@ -20,11 +20,15 @@ type Store interface {
 	Delete(nodePath string)
 	// PutBulk value should be a flatmap
 	PutBulk(nodePath string, value map[string]string)
+	Watch(nodePath string) Watcher
+	// Json output store as json
+	Json() string
 }
 
 type store struct {
-	Root      *node
-	worldLock sync.RWMutex // stop the world lock
+	Root        *node
+	worldLock   sync.RWMutex // stop the world lock
+	watcherLock sync.RWMutex
 }
 
 func New() Store {
@@ -48,7 +52,14 @@ func (s *store) Get(nodePath string) (interface{}, bool) {
 
 	n := s.internalGet(nodePath)
 	if n != nil {
-		return n.GetValue(), true
+		val := n.GetValue()
+		m, mok := val.(map[string]interface{})
+		// treat empty dir as not found result.
+		if mok && len(m) == 0 {
+			return nil, false
+		} else {
+			return n.GetValue(), true
+		}
 	}
 
 	return nil, false
@@ -85,17 +96,33 @@ func (s *store) Delete(nodePath string) {
 
 	nodePath = path.Clean(path.Join("/", nodePath))
 
-	// we do not allow the user to change "/", remove "/" equals remove "/*"
-	if nodePath == "/" {
-		s.Root.RemoveChildren(nil)
-		return
-	}
-
 	n := s.internalGet(nodePath)
 	if n == nil { // if the node does not exist, treat as success
 		return
 	}
-	n.Remove(nil)
+	n.Remove()
+}
+
+func (s *store) Watch(nodePath string) Watcher {
+	s.worldLock.Lock()
+	defer s.worldLock.Unlock()
+
+	dirName, nodeName := path.Split(nodePath)
+
+	// walk through the nodePath, create dirs and get the last directory node
+	d := s.walk(dirName, s.checkDir)
+	n := d.GetChild(nodeName)
+
+	if n != nil {
+		return n.Watch()
+	}
+	// if watch node not exist, create a empty dir.
+	n = newDir(s, nodeName, d)
+	return n.Watch()
+}
+
+func (s *store) Json() string {
+	return s.Root.Json()
 }
 
 // walk walks all the nodePath and apply the walkFunc on each directory
@@ -126,15 +153,12 @@ func (s *store) internalPut(nodePath string, value string) *node {
 	d := s.walk(dirName, s.checkDir)
 	n := d.GetChild(nodeName)
 
-	// force will try to replace an existing file
 	if n != nil {
-		n.value = value
+		n.Write(value)
 		return n
 	}
 
-	n = newKV(s, nodePath, value, d)
-	d.Add(n)
-
+	n = newKV(s, nodeName, value, d)
 	return n
 }
 
@@ -177,7 +201,6 @@ func (s *store) checkDir(parent *node, dirName string) *node {
 		return node
 	}
 
-	n := newDir(s, path.Join(parent.path, dirName), parent)
-	parent.Add(n)
+	n := newDir(s, dirName, parent)
 	return n
 }

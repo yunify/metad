@@ -1,10 +1,9 @@
 package store
 
 import (
+	"fmt"
 	"github.com/stretchr/testify/assert"
 	"testing"
-	//"github.com/stretchr/testify/suite"
-	"fmt"
 )
 
 func TestStoreBasic(t *testing.T) {
@@ -15,6 +14,8 @@ func TestStoreBasic(t *testing.T) {
 	assert.Nil(t, val)
 
 	store.Put("/foo", "bar")
+
+	//println(store.Json())
 
 	val, ok = store.Get("/foo")
 	assert.True(t, ok)
@@ -106,14 +107,18 @@ func TestStoreNodeToDirPanic(t *testing.T) {
 	assert.Equal(t, "value1", v)
 }
 
-func TestStoreRemoveEmptyParent(t *testing.T) {
+func TestStoreClean(t *testing.T) {
 	store := New()
 
 	// if dir has children, dir's text value will be hidden.
 	store.Put("/nodes/6", "node6")
 	store.Put("/nodes/6/label/key1", "value1")
 
+	//println(store.Json())
+
 	store.Delete("/nodes/6/label/key1")
+
+	//println(store.Json())
 
 	v, ok := store.Get("/nodes/6/label")
 	assert.False(t, ok)
@@ -129,4 +134,59 @@ func TestStoreRemoveEmptyParent(t *testing.T) {
 
 	_, ok = store.Get("/nodes/7")
 	assert.False(t, ok)
+}
+
+func TestWatch(t *testing.T) {
+	s := New()
+	//watch a no exist node
+	w := s.Watch("/nodes/6")
+	s.Put("/nodes/6", "node6")
+	e := <-w.EventChan()
+	assert.Equal(t, Update, e.Action)
+	assert.Equal(t, "/nodes/6", e.Path)
+
+	s.Put("/nodes/6/label/key1", "value1")
+
+	e = <-w.EventChan()
+	assert.Equal(t, Update, e.Action)
+	assert.Equal(t, "/nodes/6/label/key1", e.Path)
+
+	s.Put("/nodes/6/label/key1", "value2")
+
+	e = <-w.EventChan()
+	assert.Equal(t, Update, e.Action)
+	assert.Equal(t, "/nodes/6/label/key1", e.Path)
+
+	s.Delete("/nodes/6/label/key1")
+
+	e = <-w.EventChan()
+	assert.Equal(t, Delete, e.Action)
+	assert.Equal(t, "/nodes/6/label/key1", e.Path)
+
+	// when /nodes/6's children remove, it return to a leaf node.
+	e = <-w.EventChan()
+	assert.Equal(t, Update, e.Action)
+	assert.Equal(t, "/nodes/6", e.Path)
+
+	s.Delete("/nodes/6")
+
+	e = <-w.EventChan()
+	assert.Equal(t, Delete, e.Action)
+	assert.Equal(t, "/nodes/6", e.Path)
+
+	select {
+	case e = <-w.EventChan():
+	default:
+		e = nil
+	}
+	// expect no more event.
+	assert.Nil(t, e)
+
+	s2 := s.(*store)
+	n := s2.internalGet("/nodes/6")
+	assert.NotNil(t, n)
+	w.Remove()
+
+	n = s2.internalGet("/nodes/6")
+	assert.Nil(t, n)
 }

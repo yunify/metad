@@ -1,38 +1,63 @@
 package store
 
 import (
+	"container/list"
+	"encoding/json"
 	"fmt"
 	"path"
 )
 
 type node struct {
-	path string
+	Name string `json:"name"`
 
 	parent *node
 
-	value    string           // for key-value pair
-	children map[string]*node // for directory
+	watchers *list.List
 
-	store Store // A reference to the store this node is attached to.
+	Value    string           `json:"value"`    // for key-value pair
+	Children map[string]*node `json:"children"` // for directory
+
+	store *store // A reference to the store this node is attached to.
 }
 
-func newKV(store Store, nodePath string, value string, parent *node) *node {
-	return &node{
-		path:     nodePath,
+func newKV(store *store, nodeName string, value string, parent *node) *node {
+	n := &node{
+		Name:     nodeName,
 		parent:   parent,
-		children: nil,
-		value:    value,
+		watchers: nil,
+		Children: nil,
+		Value:    value,
 		store:    store,
+	}
+	parent.Add(n)
+	n.Notify(n.nodeEvent(Update))
+	return n
+}
+
+func newDir(store *store, nodeName string, parent *node) *node {
+	n := &node{
+		Name:     nodeName,
+		parent:   parent,
+		watchers: nil,
+		Children: make(map[string]*node),
+		store:    store,
+	}
+	if parent != nil {
+		parent.Add(n)
+	}
+	return n
+}
+
+func (n *node) Path() string {
+	if n.parent == nil {
+		return n.Name
+	} else {
+		return path.Join(n.parent.Path(), n.Name)
 	}
 }
 
-func newDir(store Store, nodePath string, parent *node) *node {
-	return &node{
-		path:     nodePath,
-		parent:   parent,
-		children: make(map[string]*node),
-		store:    store,
-	}
+func (n *node) IsRoot() bool {
+	return n.parent == nil
 }
 
 // IsHidden function checks if the node is a hidden node. A hidden node
@@ -41,37 +66,55 @@ func newDir(store Store, nodePath string, parent *node) *node {
 // For example if we have /foo/_hidden and /foo/notHidden, get "/foo"
 // will only return /foo/notHidden
 func (n *node) IsHidden() bool {
-	_, name := path.Split(n.path)
-
-	return name[0] == '_'
+	return n.Name[0] == '_'
 }
 
 // IsDir function checks whether the node is a dir.
 func (n *node) IsDir() bool {
-	return n.children != nil
+	return n.Children != nil
 }
 
 // AsDir convert node to dir
 func (n *node) AsDir() {
 	if !n.IsDir() {
-		n.children = make(map[string]*node)
+		n.Value = ""
+		n.Children = make(map[string]*node)
 	}
+	// treat convert leaf to dir as a delete.
+	n.Notify(n.nodeEvent(Delete))
 }
 
 func (n *node) AsLeaf() {
 	if n.IsDir() {
-		n.children = nil
+		n.Children = nil
 	}
+	// treat convert dir to leaf as a update.
+	n.Notify(n.nodeEvent(Update))
 }
 
 // Read function gets the value of the node.
 func (n *node) Read() string {
-	return n.value
+	return n.Value
 }
 
 // Write function set the value of the node to the given value.
 func (n *node) Write(value string) {
-	n.value = value
+	if n.IsRoot() {
+		return
+	}
+
+	oldValue := n.Value
+	n.Value = value
+	if n.IsDir() {
+		// if dir is empty, and set a text value ,so convert to leaf
+		if n.ChildrenCount() == 0 {
+			n.AsLeaf()
+		}
+	} else {
+		if oldValue != value {
+			n.Notify(n.nodeEvent(Update))
+		}
+	}
 }
 
 // List function return a slice of nodes under the receiver node.
@@ -81,10 +124,10 @@ func (n *node) List() []*node {
 		return make([]*node, 0)
 	}
 
-	nodes := make([]*node, len(n.children))
+	nodes := make([]*node, len(n.Children))
 
 	i := 0
-	for _, node := range n.children {
+	for _, node := range n.Children {
 		nodes[i] = node
 		i++
 	}
@@ -99,7 +142,7 @@ func (n *node) GetChild(name string) *node {
 		return nil
 	}
 
-	child, ok := n.children[name]
+	child, ok := n.Children[name]
 
 	if ok {
 		return child
@@ -110,18 +153,17 @@ func (n *node) GetChild(name string) *node {
 
 func (n *node) ChildrenCount() int {
 	if n.IsDir() {
-		return len(n.children)
+		return len(n.Children)
 	}
 	return 0
 }
 
 // Add function adds a node to the receiver node.
 func (n *node) Add(child *node) {
-	if n.children == nil {
-		n.children = make(map[string]*node)
+	if n.Children == nil {
+		n.Children = make(map[string]*node)
 	}
-	_, name := path.Split(child.path)
-	n.children[name] = child
+	n.Children[child.Name] = child
 }
 
 func (n *node) AddChildren(children map[string]interface{}) {
@@ -129,55 +171,127 @@ func (n *node) AddChildren(children map[string]interface{}) {
 
 		switch v := v.(type) {
 		case map[string]interface{}:
-			child := newDir(n.store, path.Join(n.path, k), n)
-			n.Add(child)
+			child := newDir(n.store, k, n)
 			child.AddChildren(v)
 		default:
 			value := fmt.Sprintf("%v", v)
-			child := newKV(n.store, path.Join(n.path, k), value, n)
-			n.Add(child)
+			newKV(n.store, k, value, n)
 		}
 	}
 }
 
 // Remove function remove the node.
-func (n *node) Remove(callback func(path string)) {
-	_, name := path.Split(n.path)
-	if n.parent != nil && n.parent.children[name] == n {
-		delete(n.parent.children, name)
+func (n *node) Remove() bool {
 
-		if callback != nil {
-			callback(n.path)
+	if !n.IsDir() {
+		// do not remove node has watcher
+		if n.watchers != nil && n.watchers.Len() > 0 {
+			n.AsDir()
+			return false
 		}
-
-		// if parent children is empty, try to remove parent or covert to leaf node .
-		if n.parent.ChildrenCount() == 0 {
-			if n.parent.value == "" {
-				n.parent.Remove(callback)
-			} else {
-				n.parent.AsLeaf()
-			}
+		if n.parent != nil && n.parent.Children[n.Name] == n {
+			delete(n.parent.Children, n.Name)
+			// only leaf node trigger delete event.
+			n.Notify(n.nodeEvent(Delete))
+			n.parent.Clean()
+			return true
 		}
+		return false
 	}
+	// retry to remove all children
+	for _, node := range n.Children {
+		node.Remove()
+	}
+
+	if n.parent != nil && n.parent.Children[n.Name] == n && n.ChildrenCount() == 0 && (n.watchers == nil || n.watchers.Len() == 0) {
+		delete(n.parent.Children, n.Name)
+		n.parent.Clean()
+		return true
+	}
+	return false
 }
 
-func (n *node) RemoveChildren(callback func(path string)) {
-	if n.IsDir() {
-		for _, node := range n.children {
-			node.Remove(callback)
+// Clean empty dir
+func (n *node) Clean() bool {
+	if !n.IsDir() {
+		return false
+	}
+	// if children is empty, try to remove  or covert to leaf node .
+	if n.ChildrenCount() == 0 {
+		if n.Value == "" {
+			if n.watchers == nil || n.watchers.Len() == 0 {
+				return n.Remove()
+			}
+		} else {
+			n.AsLeaf()
+			return true
 		}
 	}
+	return false
 }
 
 // Return node value, if node is dir, will return a map contains children's value, otherwise return n.Value
 func (n *node) GetValue() interface{} {
 	if n.IsDir() {
 		values := make(map[string]interface{})
-		for k, node := range n.children {
-			values[k] = node.GetValue()
+		for k, node := range n.Children {
+			//skip hidden node.
+			if node.IsHidden() {
+				continue
+			}
+			v := node.GetValue()
+			m, isMap := v.(map[string]interface{})
+			// skip empty dir.
+			if isMap && len(m) == 0 {
+				continue
+			}
+			values[k] = v
 		}
 		return values
 	} else {
-		return n.value
+		return n.Value
 	}
+}
+
+func (n *node) nodeEvent(action string) *Event {
+	event := newEvent(action, n.Path())
+	return event
+}
+
+func (n *node) Notify(event *Event) {
+	if n.watchers != nil && n.watchers.Len() > 0 {
+		for e := n.watchers.Front(); e != nil; e = e.Next() {
+			w := e.Value.(Watcher)
+			w.EventChan() <- event
+		}
+	}
+	// pop up event.
+	if n.parent != nil {
+		n.parent.Notify(event)
+	}
+}
+
+func (n *node) Watch() Watcher {
+	if n.watchers == nil {
+		n.watchers = list.New()
+	}
+	w := newWatcher(n)
+	elem := n.watchers.PushBack(w)
+	w.remove = func() {
+		if w.removed { // avoid removing it twice
+			return
+		}
+		w.removed = true
+		n.watchers.Remove(elem)
+		if n.watchers.Len() == 0 {
+			n.Clean()
+		}
+	}
+
+	return w
+}
+
+func (s *node) Json() string {
+	b, _ := json.Marshal(s)
+	return string(b)
 }
