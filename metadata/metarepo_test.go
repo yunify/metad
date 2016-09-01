@@ -46,8 +46,7 @@ func TestMetarepoData(t *testing.T) {
 	time.Sleep(sleepTime)
 	ValidTestData(t, testData, metarepo.data)
 
-	val, ok := metarepo.Root("192.168.0.1", "/nodes/0")
-	assert.True(t, ok)
+	val := metarepo.Root("192.168.0.1", "/nodes/0")
 	assert.NotNil(t, val)
 
 	mapVal, mok := val.(map[string]interface{})
@@ -62,23 +61,23 @@ func TestMetarepoData(t *testing.T) {
 		//TODO etcd v2 current not support watch children delete. so try resync
 		metarepo.ReSync()
 	}
-	time.Sleep(1000 * time.Millisecond)
-	_, ok = metarepo.GetData("/nodes/0")
-	assert.False(t, ok)
+	time.Sleep(sleepTime)
+	val = metarepo.GetData("/nodes/0")
+	assert.Nil(t, val)
 
 	subs := []string{"1", "3", "noexistkey"}
 	//test batch delete
 	err = metarepo.DeleteData("nodes", subs...)
-	time.Sleep(1000 * time.Millisecond)
+	time.Sleep(sleepTime)
 	assert.NoError(t, err)
 
 	for _, sub := range subs {
-		_, ok = metarepo.GetData("/nodes/" + sub)
-		assert.False(t, ok)
+		val = metarepo.GetData("/nodes/" + sub)
+		assert.Nil(t, val)
 	}
 
-	_, ok = metarepo.GetData("/nodes/2")
-	assert.True(t, ok)
+	val = metarepo.GetData("/nodes/2")
+	assert.NotNil(t, val)
 
 	metarepo.DeleteData("/")
 	metarepo.StopSync()
@@ -118,27 +117,27 @@ func TestMetarepoMapping(t *testing.T) {
 	// batch update
 	err = metarepo.PutMapping("/", mappings, true)
 	assert.NoError(t, err)
-	time.Sleep(1000 * time.Millisecond)
+	time.Sleep(sleepTime)
 
 	metarepo.DeleteMapping("/192.168.1.0")
 
-	time.Sleep(1000 * time.Millisecond)
-	_, ok := metarepo.GetMapping("/192.168.1.0")
-	assert.False(t, ok)
+	time.Sleep(sleepTime)
+	val := metarepo.GetMapping("/192.168.1.0")
+	assert.Nil(t, val)
 
 	subs := []string{"192.168.1.1", "192.168.1.3", "noexistkey"}
 	//test batch delete
 	err = metarepo.DeleteMapping("/", subs...)
-	time.Sleep(1000 * time.Millisecond)
+	time.Sleep(sleepTime)
 	assert.NoError(t, err)
 
 	for _, sub := range subs {
-		_, ok = metarepo.GetMapping("/" + sub)
-		assert.False(t, ok)
+		val = metarepo.GetMapping("/" + sub)
+		assert.Nil(t, val)
 	}
 
-	_, ok = metarepo.GetMapping("/192.168.1.2")
-	assert.True(t, ok)
+	val = metarepo.GetMapping("/192.168.1.2")
+	assert.NotNil(t, val)
 
 	p := rand.Intn(maxNode)
 	ip := fmt.Sprintf("192.168.1.%v", p)
@@ -157,9 +156,8 @@ func TestMetarepoMapping(t *testing.T) {
 		"nodes": "/",
 		"node2": "/nodes/2",
 	}
-	time.Sleep(1000 * time.Millisecond)
-	mapping, ok := metarepo.GetMapping(fmt.Sprintf("/%s", ip))
-	assert.True(t, ok)
+	time.Sleep(sleepTime)
+	mapping := metarepo.GetMapping(fmt.Sprintf("/%s", ip))
 	assert.Equal(t, expectMapping1, mapping)
 
 	// test update key
@@ -172,24 +170,21 @@ func TestMetarepoMapping(t *testing.T) {
 		"node2": "/nodes/2",
 		"node3": "/nodes/3",
 	}
-	time.Sleep(1000 * time.Millisecond)
-	mapping, ok = metarepo.GetMapping(fmt.Sprintf("/%s", ip))
-	assert.True(t, ok)
+	time.Sleep(sleepTime)
+	mapping = metarepo.GetMapping(fmt.Sprintf("/%s", ip))
 	assert.Equal(t, expectMapping2, mapping)
 
 	// test delete mapping
 	metarepo.DeleteMapping(ip + "/node3")
-	time.Sleep(1000 * time.Millisecond)
-	mapping, ok = metarepo.GetMapping(fmt.Sprintf("/%s", ip))
-	assert.True(t, ok)
+	time.Sleep(sleepTime)
+	mapping = metarepo.GetMapping(fmt.Sprintf("/%s", ip))
 	assert.Equal(t, expectMapping1, mapping)
 
 	// test update replace(true)
 	err = metarepo.PutMapping(ip, expectMapping0, true)
 	assert.NoError(t, err)
-	time.Sleep(1000 * time.Millisecond)
-	mapping, ok = metarepo.GetMapping(fmt.Sprintf("/%s", ip))
-	assert.True(t, ok)
+	time.Sleep(sleepTime)
+	mapping = metarepo.GetMapping(fmt.Sprintf("/%s", ip))
 	assert.Equal(t, expectMapping0, mapping)
 
 	metarepo.DeleteData("/")
@@ -219,7 +214,7 @@ func TestMetarepoSelf(t *testing.T) {
 	metarepo.StartSync()
 
 	testData := FillTestData(metarepo)
-	time.Sleep(1000 * time.Millisecond)
+	time.Sleep(sleepTime)
 	ValidTestData(t, testData, metarepo.data)
 
 	key := "node"
@@ -235,26 +230,24 @@ func TestMetarepoSelf(t *testing.T) {
 	// batch update
 	err = metarepo.PutMapping("/", mappings, true)
 	assert.NoError(t, err)
-	time.Sleep(1000 * time.Millisecond)
+	time.Sleep(sleepTime)
 
 	//test mapping get
-	mappings2, ok := metarepo.GetMapping("/")
-	assert.True(t, ok)
+	mappings2 := metarepo.GetMapping("/")
 	assert.Equal(t, mappings, mappings2)
 
 	// test GetSelf
-	time.Sleep(1000 * time.Millisecond)
+	time.Sleep(sleepTime)
 	p := rand.Intn(maxNode)
 	ip := fmt.Sprintf("192.168.1.%v", p)
 
-	val, ok := metarepo.Self(ip, "/")
+	val := metarepo.Self(ip, "/")
 	mapVal, mok := val.(map[string]interface{})
 
 	assert.True(t, mok)
 	assert.NotNil(t, mapVal[key])
 
-	val, ok = metarepo.Self(ip, "/node/name")
-	assert.True(t, ok)
+	val = metarepo.Self(ip, "/node/name")
 	assert.Equal(t, fmt.Sprintf("node%v", p), val)
 
 	//test date delete
@@ -264,9 +257,8 @@ func TestMetarepoSelf(t *testing.T) {
 		//etcd v2 current not support watch children's children delete. so try resync
 		metarepo.ReSync()
 	}
-	time.Sleep(1000 * time.Millisecond)
-	val, ok = metarepo.Self(ip, "/node/name")
-	assert.False(t, ok)
+	time.Sleep(sleepTime)
+	val = metarepo.Self(ip, "/node/name")
 	assert.Nil(t, val)
 
 	//test mapping dir
@@ -278,9 +270,8 @@ func TestMetarepoSelf(t *testing.T) {
 		},
 	}, false)
 
-	time.Sleep(1000 * time.Millisecond)
-	val, ok = metarepo.Self(ip, "/dir/n1/name")
-	assert.True(t, ok)
+	time.Sleep(sleepTime)
+	val = metarepo.Self(ip, "/dir/n1/name")
 	assert.Equal(t, "node1", val)
 
 	metarepo.DeleteData("/")
@@ -311,7 +302,7 @@ func TestMetarepoRoot(t *testing.T) {
 	FillTestData(metarepo)
 
 	metarepo.StartSync()
-	time.Sleep(1000 * time.Millisecond)
+	time.Sleep(sleepTime)
 
 	ip := "192.168.1.0"
 	mapping := make(map[string]interface{})
@@ -319,9 +310,8 @@ func TestMetarepoRoot(t *testing.T) {
 	err = metarepo.PutMapping(ip, mapping, true)
 	assert.NoError(t, err)
 
-	time.Sleep(1000 * time.Millisecond)
-	val, ok := metarepo.Root(ip, "/")
-	assert.True(t, ok)
+	time.Sleep(sleepTime)
+	val := metarepo.Root(ip, "/")
 	mapVal, mok := val.(map[string]interface{})
 	assert.True(t, mok)
 	selfVal := mapVal["self"]
@@ -330,7 +320,7 @@ func TestMetarepoRoot(t *testing.T) {
 
 	metarepo.SetOnlySelf(true)
 
-	val, ok = metarepo.Root(ip, "/")
+	val = metarepo.Root(ip, "/")
 	mapVal = val.(map[string]interface{})
 	selfVal = mapVal["self"]
 	assert.NotNil(t, selfVal)

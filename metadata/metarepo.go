@@ -66,64 +66,64 @@ func (r *MetadataRepo) StopSync() {
 	r.mappingStopChan <- true
 }
 
-func (r *MetadataRepo) Root(clientIP string, metapath string) (interface{}, bool) {
+func (r *MetadataRepo) Root(clientIP string, metapath string) interface{} {
 	log.Debug("Get clientIP:%s metapath:%s", clientIP, metapath)
 
 	metapath = path.Clean(path.Join("/", metapath))
 	if r.onlySelf {
 		if metapath == "/" {
 			val := make(map[string]interface{})
-			selfVal, ok := r.Self(clientIP, "/")
-			if ok {
+			selfVal := r.Self(clientIP, "/")
+			if selfVal != nil {
 				val["self"] = selfVal
 			}
-			return val, true
+			return val
 		} else {
-			return nil, false
+			return nil
 		}
 	} else {
 		val := r.data.Get(metapath)
 		if val == nil {
-			return nil, false
+			return nil
 		} else {
 			if metapath == "/" {
-				selfVal, ok := r.Self(clientIP, "/")
-				if ok {
+				selfVal := r.Self(clientIP, "/")
+				if selfVal != nil {
 					mapVal, ok := val.(map[string]interface{})
 					if ok {
 						mapVal["self"] = selfVal
 					}
 				}
 			}
-			return val, true
+			return val
 		}
 	}
 }
 
-func (r *MetadataRepo) Self(clientIP string, nodePath string) (interface{}, bool) {
+func (r *MetadataRepo) Self(clientIP string, nodePath string) interface{} {
 	nodePath = path.Join("/", nodePath)
 	log.Debug("Self nodePath:%s, clientIP:%s", nodePath, clientIP)
-	mappingData, ok := r.GetMapping(path.Join("/", clientIP))
-	if !ok {
+	mappingData := r.GetMapping(path.Join("/", clientIP))
+	if mappingData == nil {
 		log.Warning("Can not find mapping for %s", clientIP)
-		return nil, false
+		return nil
 	}
 	mapping, mok := mappingData.(map[string]interface{})
 	if !mok {
 		log.Warning("Mapping for %s is not a map, result:%v", clientIP, mappingData)
-		return nil, false
+		return nil
 	}
 	return r.getMappingDatas(nodePath, mapping)
 }
 
-func (r *MetadataRepo) getMappingData(nodePath, link string) (interface{}, bool) {
+func (r *MetadataRepo) getMappingData(nodePath, link string) interface{} {
 	nodePath = path.Join(link, nodePath)
 	data := r.data.Get(nodePath)
 	log.Debug("getMappingData %s %v", nodePath, data != nil)
 	return data
 }
 
-func (r *MetadataRepo) getMappingDatas(nodePath string, mapping map[string]interface{}) (interface{}, bool) {
+func (r *MetadataRepo) getMappingDatas(nodePath string, mapping map[string]interface{}) interface{} {
 	nodePath = path.Join("/", nodePath)
 	paths := strings.Split(nodePath, "/")[1:] // trim first blank item
 	// nodePath is "/"
@@ -132,16 +132,16 @@ func (r *MetadataRepo) getMappingDatas(nodePath string, mapping map[string]inter
 		for k, v := range mapping {
 			submapping, isMap := v.(map[string]interface{})
 			if isMap {
-				val, getOK := r.getMappingDatas("/", submapping)
-				if getOK {
+				val := r.getMappingDatas("/", submapping)
+				if val != nil {
 					meta[k] = val
 				} else {
 					log.Warning("Can not get values from backend by mapping: %v", submapping)
 				}
 			} else {
 				subNodePath := fmt.Sprintf("%v", v)
-				val, getOK := r.getMappingData("/", subNodePath)
-				if getOK {
+				val := r.getMappingData("/", subNodePath)
+				if val != nil {
 					meta[k] = val
 				} else {
 					log.Warning("Can not get values from backend by mapping: %v", subNodePath)
@@ -149,7 +149,7 @@ func (r *MetadataRepo) getMappingDatas(nodePath string, mapping map[string]inter
 			}
 
 		}
-		return meta, true
+		return meta
 	} else {
 		elemName := paths[0]
 		elemValue, ok := mapping[elemName]
@@ -162,7 +162,7 @@ func (r *MetadataRepo) getMappingDatas(nodePath string, mapping map[string]inter
 			}
 		} else {
 			log.Debug("Can not find mapping for : %v, mapping:%v", nodePath, mapping)
-			return nil, false
+			return nil
 		}
 	}
 }
