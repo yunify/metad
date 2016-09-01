@@ -66,12 +66,12 @@ func (r *MetadataRepo) StopSync() {
 	r.mappingStopChan <- true
 }
 
-func (r *MetadataRepo) Root(clientIP string, metapath string) interface{} {
-	log.Debug("Get clientIP:%s metapath:%s", clientIP, metapath)
+func (r *MetadataRepo) Root(clientIP string, nodePath string) interface{} {
+	log.Debug("Get clientIP:%s nodePath:%s", clientIP, nodePath)
 
-	metapath = path.Clean(path.Join("/", metapath))
+	nodePath = path.Clean(path.Join("/", nodePath))
 	if r.onlySelf {
-		if metapath == "/" {
+		if nodePath == "/" {
 			val := make(map[string]interface{})
 			selfVal := r.Self(clientIP, "/")
 			if selfVal != nil {
@@ -82,11 +82,11 @@ func (r *MetadataRepo) Root(clientIP string, metapath string) interface{} {
 			return nil
 		}
 	} else {
-		val := r.data.Get(metapath)
+		val := r.data.Get(nodePath)
 		if val == nil {
 			return nil
 		} else {
-			if metapath == "/" {
+			if nodePath == "/" {
 				selfVal := r.Self(clientIP, "/")
 				if selfVal != nil {
 					mapVal, ok := val.(map[string]interface{})
@@ -98,6 +98,12 @@ func (r *MetadataRepo) Root(clientIP string, metapath string) interface{} {
 			return val
 		}
 	}
+}
+
+func (r *MetadataRepo) Watch(clientIP string, nodePath string) interface{} {
+	w := r.data.Watch(nodePath)
+	defer w.Remove()
+	select {}
 }
 
 func (r *MetadataRepo) Self(clientIP string, nodePath string) interface{} {

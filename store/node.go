@@ -33,7 +33,7 @@ func newKV(store *store, nodeName string, value string, parent *node) *node {
 		store:    store,
 	}
 	parent.Add(n)
-	n.Notify(n.nodeEvent(Update))
+	n.Notify(Update)
 	return n
 }
 
@@ -62,6 +62,14 @@ func (n *node) Path() string {
 	}
 }
 
+func (n *node) RelativePath(end *node) string {
+	if n.parent == nil || n == end {
+		return "/"
+	} else {
+		return path.Join(n.parent.RelativePath(end), n.Name)
+	}
+}
+
 func (n *node) IsRoot() bool {
 	return n.parent == nil
 }
@@ -86,7 +94,7 @@ func (n *node) AsDir() {
 		n.Children = make(map[string]*node)
 	}
 	// treat convert leaf to dir as a delete.
-	n.Notify(n.nodeEvent(Delete))
+	n.Notify(Delete)
 }
 
 func (n *node) AsLeaf() {
@@ -94,7 +102,7 @@ func (n *node) AsLeaf() {
 		n.Children = nil
 	}
 	// treat convert dir to leaf as a update.
-	n.Notify(n.nodeEvent(Update))
+	n.Notify(Update)
 }
 
 // Read function gets the value of the node.
@@ -117,7 +125,7 @@ func (n *node) Write(value string) {
 		}
 	} else {
 		if oldValue != value {
-			n.Notify(n.nodeEvent(Update))
+			n.Notify(Update)
 		}
 	}
 }
@@ -184,7 +192,7 @@ func (n *node) Remove() bool {
 		if n.parent != nil && n.parent.Children[n.Name] == n {
 			delete(n.parent.Children, n.Name)
 			// only leaf node trigger delete event.
-			n.Notify(n.nodeEvent(Delete))
+			n.Notify(Delete)
 			n.parent.Clean()
 			return true
 		}
@@ -249,16 +257,9 @@ func (n *node) GetValue() interface{} {
 	}
 }
 
-func (n *node) nodeEvent(action string) *Event {
-	event := newEvent(action, n.Path(), n.Value)
-	return event
-}
-
-func (n *node) Notify(event *Event) {
-	if event == nil {
-		panic(errors.New("event can not be nil"))
-	}
+func (n *node) internalNotify(action string, eventNode *node) {
 	if n.watchers != nil && n.watchers.Len() > 0 {
+		event := newEvent(action, eventNode.RelativePath(n), eventNode.Value)
 		for e := n.watchers.Front(); e != nil; e = e.Next() {
 			w := e.Value.(Watcher)
 			w.EventChan() <- event
@@ -266,8 +267,12 @@ func (n *node) Notify(event *Event) {
 	}
 	// pop up event.
 	if n.parent != nil {
-		n.parent.Notify(event)
+		n.parent.internalNotify(action, eventNode)
 	}
+}
+
+func (n *node) Notify(action string) {
+	n.internalNotify(action, n)
 }
 
 func (n *node) Watch() Watcher {

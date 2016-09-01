@@ -144,61 +144,64 @@ func TestWatch(t *testing.T) {
 	s.Put("/nodes/6", "node6")
 	e := readEvent(w.EventChan())
 	assert.Equal(t, Update, e.Action)
-	assert.Equal(t, "/nodes/6", e.Path)
+	assert.Equal(t, "/", e.Path)
+	assert.Equal(t, "node6", e.Value)
 
 	s.Put("/nodes/6/label/key1", "value1")
 
 	// leaf node /nodes/6 convert to dir, tread as deleted.
 	e = readEvent(w.EventChan())
 	assert.Equal(t, Delete, e.Action)
-	assert.Equal(t, "/nodes/6", e.Path)
+	assert.Equal(t, "/", e.Path)
 
 	e = readEvent(w.EventChan())
 	assert.Equal(t, Update, e.Action)
-	assert.Equal(t, "/nodes/6/label/key1", e.Path)
+	assert.Equal(t, "/label/key1", e.Path)
+	assert.Equal(t, "value1", e.Value)
 
 	s.Put("/nodes/6/label/key1", "value2")
 
 	e = readEvent(w.EventChan())
 	assert.Equal(t, Update, e.Action)
-	assert.Equal(t, "/nodes/6/label/key1", e.Path)
+	assert.Equal(t, "/label/key1", e.Path)
+	assert.Equal(t, "value2", e.Value)
 
 	s.Delete("/nodes/6/label/key1")
 
 	e = readEvent(w.EventChan())
 	assert.Equal(t, Delete, e.Action)
-	assert.Equal(t, "/nodes/6/label/key1", e.Path)
+	assert.Equal(t, "/label/key1", e.Path)
 
 	// when /nodes/6's children remove, it return to a leaf node.
 	e = readEvent(w.EventChan())
 	assert.Equal(t, Update, e.Action)
-	assert.Equal(t, "/nodes/6", e.Path)
+	assert.Equal(t, "/", e.Path)
 
 	s.Put("/nodes/6/name", "node6")
 	s.Put("/nodes/6/ip", "192.168.1.1")
 
 	e = readEvent(w.EventChan())
 	assert.Equal(t, Delete, e.Action)
-	assert.Equal(t, "/nodes/6", e.Path)
+	assert.Equal(t, "/", e.Path)
 
 	e = readEvent(w.EventChan())
 	assert.Equal(t, Update, e.Action)
-	assert.Equal(t, "/nodes/6/name", e.Path)
+	assert.Equal(t, "/name", e.Path)
 	e = readEvent(w.EventChan())
 	assert.Equal(t, Update, e.Action)
-	assert.Equal(t, "/nodes/6/ip", e.Path)
+	assert.Equal(t, "/ip", e.Path)
 
 	s.Delete("/nodes/6")
 
 	e = readEvent(w.EventChan())
 	//println(e.Action,e.Path)
 	assert.Equal(t, Delete, e.Action)
-	assert.True(t, e.Path == "/nodes/6/name" || e.Path == "/nodes/6/ip")
+	assert.True(t, e.Path == "/name" || e.Path == "/ip")
 
 	e = readEvent(w.EventChan())
 	//println(e.Action,e.Path)
 	assert.Equal(t, Delete, e.Action)
-	assert.True(t, e.Path == "/nodes/6/name" || e.Path == "/nodes/6/ip")
+	assert.True(t, e.Path == "/name" || e.Path == "/ip")
 
 	e = readEvent(w.EventChan())
 	// expect no more event.

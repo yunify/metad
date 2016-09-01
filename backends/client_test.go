@@ -442,6 +442,7 @@ func TestMappingSync(t *testing.T) {
 			storeClient.PutMapping(ip, mapping, true)
 		}
 		time.Sleep(1000 * time.Millisecond)
+
 		for i := 10; i < 20; i++ {
 			ip := fmt.Sprintf("192.168.1.%v", i)
 			val := mappingstore.Get(ip)
