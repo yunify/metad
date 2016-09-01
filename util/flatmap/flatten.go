@@ -58,6 +58,10 @@ func FlattenSlice(thing []interface{}) map[string]string {
 }
 
 func flatten(result map[string]string, prefix string, v reflect.Value) {
+	// skip empty key node.
+	if prefix == "" {
+		return
+	}
 	if v.Kind() == reflect.Interface {
 		v = v.Elem()
 	}

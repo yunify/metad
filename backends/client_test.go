@@ -275,8 +275,8 @@ func TestClientNoPrefix(t *testing.T) {
 		time.Sleep(1000 * time.Millisecond)
 
 		// mapping data should not sync to metadata
-		_, ok := metastore.Get("/_metad")
-		assert.False(t, ok)
+		val = metastore.Get("/_metad")
+		assert.Nil(t, val)
 
 		assert.NoError(t, storeClient.Delete("/", true))
 		assert.NoError(t, getErr)
@@ -336,8 +336,7 @@ func TestClientSync(t *testing.T) {
 		time.Sleep(1000 * time.Millisecond)
 		ValidTestData(t, testData, metastore)
 
-		val, ok := metastore.Get(deletedKey)
-		assert.False(t, ok)
+		val := metastore.Get(deletedKey)
 		assert.Nil(t, val)
 
 		storeClient.Delete("/", true)
@@ -427,8 +426,7 @@ func TestMappingSync(t *testing.T) {
 
 		for i := 0; i < 10; i++ {
 			ip := fmt.Sprintf("192.168.1.%v", i)
-			val, ok := mappingstore.Get(ip)
-			assert.True(t, ok)
+			val := mappingstore.Get(ip)
 			mapVal, mok := val.(map[string]interface{})
 			assert.True(t, mok)
 			path := mapVal["instance"]
@@ -446,8 +444,7 @@ func TestMappingSync(t *testing.T) {
 		time.Sleep(1000 * time.Millisecond)
 		for i := 10; i < 20; i++ {
 			ip := fmt.Sprintf("192.168.1.%v", i)
-			val, ok := mappingstore.Get(ip)
-			assert.True(t, ok)
+			val := mappingstore.Get(ip)
 			mapVal, mok := val.(map[string]interface{})
 			assert.True(t, mok)
 			path := mapVal["instance"]
@@ -457,8 +454,7 @@ func TestMappingSync(t *testing.T) {
 		nodePath := ip + "/" + "instance"
 		storeClient.PutMapping(nodePath, "/instances/new1", true)
 		time.Sleep(1000 * time.Millisecond)
-		val, ok := mappingstore.Get(nodePath)
-		assert.True(t, ok)
+		val := mappingstore.Get(nodePath)
 		assert.Equal(t, "/instances/new1", val)
 		storeClient.Delete("/", true)
 		storeClient.DeleteMapping("/", true)
@@ -512,7 +508,7 @@ func RandomDelete(testData map[string]string, storeClient StoreClient) string {
 
 func ValidTestData(t *testing.T, testData map[string]string, metastore store.Store) {
 	for k, v := range testData {
-		storeVal, _ := metastore.Get(k)
+		storeVal := metastore.Get(k)
 		assert.Equal(t, v, storeVal)
 	}
 }

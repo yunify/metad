@@ -177,8 +177,8 @@ func dataGet(w http.ResponseWriter, req *http.Request) {
 	if nodePath == "" {
 		nodePath = "/"
 	}
-	val, ok := metadataRepo.GetData(nodePath)
-	if !ok {
+	val := metadataRepo.GetData(nodePath)
+	if val == nil {
 		log.Warning("dataGet %s not found", nodePath)
 		respondError(w, req, "Not found", http.StatusNotFound)
 	} else {
@@ -242,8 +242,8 @@ func mappingGet(w http.ResponseWriter, req *http.Request) {
 	if nodePath == "" {
 		nodePath = "/"
 	}
-	val, ok := metadataRepo.GetMapping(nodePath)
-	if !ok {
+	val := metadataRepo.GetMapping(nodePath)
+	if val == nil {
 		log.Warning("mappingGet %s not found", nodePath)
 		respondError(w, req, "Not found", http.StatusNotFound)
 	} else {

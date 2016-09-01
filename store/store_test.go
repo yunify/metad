@@ -10,22 +10,19 @@ import (
 func TestStoreBasic(t *testing.T) {
 	store := New()
 
-	val, ok := store.Get("/foo")
-	assert.False(t, ok)
+	val := store.Get("/foo")
 	assert.Nil(t, val)
 
 	store.Put("/foo", "bar")
 
 	//println(store.Json())
 
-	val, ok = store.Get("/foo")
-	assert.True(t, ok)
+	val = store.Get("/foo")
 	assert.Equal(t, "bar", val)
 
 	store.Delete("/foo")
 
-	val, ok = store.Get("/foo")
-	assert.False(t, ok)
+	val = store.Get("/foo")
 	assert.Nil(t, val)
 }
 
@@ -34,20 +31,17 @@ func TestStoreDir(t *testing.T) {
 
 	store.Put("/foo/foo1", "")
 
-	val, ok := store.Get("/foo")
-	assert.True(t, ok)
+	val := store.Get("/foo")
 	_, mok := val.(map[string]interface{})
 	assert.True(t, mok)
 
 	store.Put("/foo/foo1/key1", "val1")
-	val, ok = store.Get("/foo/foo1/key1")
-	assert.True(t, ok)
+	val = store.Get("/foo/foo1/key1")
 	assert.Equal(t, "val1", val)
 
 	store.Delete("/foo/foo1")
 
-	val, ok = store.Get("/foo/foo1")
-	assert.False(t, ok)
+	val = store.Get("/foo/foo1")
 	assert.Nil(t, val)
 
 }
@@ -63,11 +57,9 @@ func TestStoreBulk(t *testing.T) {
 	}
 	store.PutBulk("/", values)
 
-	val, ok := store.Get("/clusters/10")
-	assert.True(t, ok)
+	val := store.Get("/clusters/10")
 
-	val, ok = store.Get("/clusters/1/ip")
-	assert.True(t, ok)
+	val = store.Get("/clusters/1/ip")
 	assert.Equal(t, "192.168.0.1", val)
 
 }
@@ -84,11 +76,9 @@ func TestStoreSets(t *testing.T) {
 	}
 	store.Put("/clusters", values)
 
-	val, ok := store.Get("/clusters/10")
-	assert.True(t, ok)
+	val := store.Get("/clusters/10")
 
-	val, ok = store.Get("/clusters/1/ip")
-	assert.True(t, ok)
+	val = store.Get("/clusters/1/ip")
 	assert.Equal(t, "192.168.0.1", val)
 
 }
@@ -100,11 +90,11 @@ func TestStoreNodeToDirPanic(t *testing.T) {
 	// create pre node's child's child, will cause panic.
 	store.Put("/nodes/6/label/key1", "value1")
 
-	v, _ := store.Get("/nodes/6")
+	v := store.Get("/nodes/6")
 	_, mok := v.(map[string]interface{})
 	assert.True(t, mok)
 
-	v, _ = store.Get("/nodes/6/label/key1")
+	v = store.Get("/nodes/6/label/key1")
 	assert.Equal(t, "value1", v)
 }
 
@@ -121,20 +111,19 @@ func TestStoreClean(t *testing.T) {
 
 	//println(store.Json())
 
-	v, ok := store.Get("/nodes/6/label")
-	assert.False(t, ok)
+	val := store.Get("/nodes/6/label")
+	assert.Nil(t, val)
 
 	// if dir's children been deleted, and dir has text value ,dir will become a leaf node.
-	v, ok = store.Get("/nodes/6")
-	assert.True(t, ok)
-	assert.Equal(t, "node6", v)
+	val = store.Get("/nodes/6")
+	assert.Equal(t, "node6", val)
 
 	// when delete leaf node, empty parent dir will been auto delete.
 	store.Put("/nodes/7/label/key1", "value1")
 	store.Delete("/nodes/7/label/key1")
 
-	_, ok = store.Get("/nodes/7")
-	assert.False(t, ok)
+	val = store.Get("/nodes/7")
+	assert.Nil(t, val)
 }
 
 func readEvent(ch chan *Event) *Event {
@@ -261,14 +250,12 @@ func TestWatchRoot(t *testing.T) {
 
 func TestEmptyStore(t *testing.T) {
 	s := newStore()
-	val, ok := s.Get("/")
-	assert.True(t, ok)
+	val := s.Get("/")
 	assert.Equal(t, 0, len(val.(map[string]interface{})))
 
 	s.Put("/", "test")
 
-	val, ok = s.Get("/")
-	assert.True(t, ok)
+	val = s.Get("/")
 	assert.Equal(t, 0, len(val.(map[string]interface{})))
 
 	w := s.Watch("/")
@@ -278,4 +265,21 @@ func TestEmptyStore(t *testing.T) {
 	assert.Nil(t, e)
 
 	w.Remove()
+}
+
+func TestBlankNode(t *testing.T) {
+	s := newStore()
+	s.Put("/", map[string]interface{}{
+		"": map[string]interface{}{
+			"": "blank_node",
+		},
+	})
+
+	val := s.Get("/")
+	assert.Equal(t, 0, len(val.(map[string]interface{})))
+
+	s.Put("/test//node", "n1")
+	val = s.Get("/test/node")
+	assert.Equal(t, val, "n1")
+
 }

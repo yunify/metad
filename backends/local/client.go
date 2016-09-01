@@ -20,8 +20,8 @@ func NewLocalClient() (*Client, error) {
 
 // Get queries etcd for nodePath.
 func (c *Client) Get(nodePath string, dir bool) (interface{}, error) {
-	r, ok := c.data.Get(nodePath)
-	if ok {
+	r := c.data.Get(nodePath)
+	if r != nil {
 		return r, nil
 	} else {
 		if dir {
@@ -50,8 +50,8 @@ func (c *Client) Sync(s store.Store, stopChan chan bool) {
 }
 
 func (c *Client) GetMapping(nodePath string, dir bool) (interface{}, error) {
-	r, ok := c.mapping.Get(nodePath)
-	if ok {
+	r := c.mapping.Get(nodePath)
+	if r != nil {
 		return r, nil
 	} else {
 		if dir {
@@ -81,8 +81,8 @@ func (c *Client) SyncMapping(mapping store.Store, stopChan chan bool) {
 
 func (c *Client) internalSync(name string, from store.Store, to store.Store, stopChan chan bool) {
 	w := from.Watch("/")
-	meta, ok := from.Get("/")
-	if ok {
+	meta := from.Get("/")
+	if meta != nil {
 		to.Put("/", meta)
 	}
 	for {

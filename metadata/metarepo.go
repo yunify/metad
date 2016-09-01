@@ -82,8 +82,8 @@ func (r *MetadataRepo) Root(clientIP string, metapath string) (interface{}, bool
 			return nil, false
 		}
 	} else {
-		val, ok := r.data.Get(metapath)
-		if !ok {
+		val := r.data.Get(metapath)
+		if val == nil {
 			return nil, false
 		} else {
 			if metapath == "/" {
@@ -118,9 +118,9 @@ func (r *MetadataRepo) Self(clientIP string, nodePath string) (interface{}, bool
 
 func (r *MetadataRepo) getMappingData(nodePath, link string) (interface{}, bool) {
 	nodePath = path.Join(link, nodePath)
-	data, ok := r.data.Get(nodePath)
-	log.Debug("getMappingData %s %v", nodePath, ok)
-	return data, ok
+	data := r.data.Get(nodePath)
+	log.Debug("getMappingData %s %v", nodePath, data != nil)
+	return data
 }
 
 func (r *MetadataRepo) getMappingDatas(nodePath string, mapping map[string]interface{}) (interface{}, bool) {
@@ -167,7 +167,7 @@ func (r *MetadataRepo) getMappingDatas(nodePath string, mapping map[string]inter
 	}
 }
 
-func (r *MetadataRepo) GetData(nodePath string) (interface{}, bool) {
+func (r *MetadataRepo) GetData(nodePath string) interface{} {
 	return r.data.Get(nodePath)
 }
 
@@ -183,9 +183,9 @@ func (r *MetadataRepo) DeleteData(nodePath string, subs ...string) error {
 	if len(subs) > 0 {
 		for _, sub := range subs {
 			subPath := path.Join(nodePath, sub)
-			v, ok := r.data.Get(subPath)
+			v := r.data.Get(subPath)
 			// if subPath metadata not exist, just ignore.
-			if ok {
+			if v != nil {
 				_, dir := v.(map[string]interface{})
 				err = r.storeClient.Delete(subPath, dir)
 				if err != nil {
@@ -195,8 +195,8 @@ func (r *MetadataRepo) DeleteData(nodePath string, subs ...string) error {
 		}
 		return nil
 	} else {
-		v, ok := r.data.Get(nodePath)
-		if ok {
+		v := r.data.Get(nodePath)
+		if v != nil {
 			_, dir := v.(map[string]interface{})
 			return r.storeClient.Delete(nodePath, dir)
 		}
@@ -205,7 +205,7 @@ func (r *MetadataRepo) DeleteData(nodePath string, subs ...string) error {
 
 }
 
-func (r *MetadataRepo) GetMapping(nodePath string) (interface{}, bool) {
+func (r *MetadataRepo) GetMapping(nodePath string) interface{} {
 	return r.mapping.Get(nodePath)
 }
 
@@ -266,9 +266,9 @@ func (r *MetadataRepo) DeleteMapping(nodePath string, subs ...string) error {
 	if len(subs) > 0 {
 		for _, sub := range subs {
 			subPath := path.Join(nodePath, sub)
-			v, ok := r.mapping.Get(subPath)
+			v := r.mapping.Get(subPath)
 			// if subPath mapping not exist, just ignore.
-			if ok {
+			if v != nil {
 				_, dir := v.(map[string]interface{})
 				err = r.storeClient.DeleteMapping(subPath, dir)
 				if err != nil {
@@ -278,8 +278,8 @@ func (r *MetadataRepo) DeleteMapping(nodePath string, subs ...string) error {
 		}
 		return nil
 	} else {
-		v, ok := r.mapping.Get(nodePath)
-		if ok {
+		v := r.mapping.Get(nodePath)
+		if v != nil {
 			_, dir := v.(map[string]interface{})
 			return r.storeClient.DeleteMapping(nodePath, dir)
 		}

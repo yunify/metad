@@ -362,7 +362,7 @@ func FillTestData(metarepo *MetadataRepo) map[string]string {
 
 func ValidTestData(t *testing.T, testData map[string]string, metastore store.Store) {
 	for k, v := range testData {
-		storeVal, _ := metastore.Get(k)
+		storeVal := metastore.Get(k)
 		assert.Equal(t, v, storeVal)
 	}
 }

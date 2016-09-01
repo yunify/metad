@@ -14,7 +14,7 @@ type Store interface {
 	// Get
 	// return a string (nodePath is a leaf node) or
 	// a map[string]interface{} (nodePath is dir)
-	Get(nodePath string) (interface{}, bool)
+	Get(nodePath string) interface{}
 	// Put value can be a map[string]interface{} or string
 	Put(nodePath string, value interface{})
 	Delete(nodePath string)
@@ -43,7 +43,7 @@ func newStore() *store {
 }
 
 // Get returns a path value.
-func (s *store) Get(nodePath string) (interface{}, bool) {
+func (s *store) Get(nodePath string) interface{} {
 
 	s.worldLock.RLock()
 	defer s.worldLock.RUnlock()
@@ -56,13 +56,13 @@ func (s *store) Get(nodePath string) (interface{}, bool) {
 		m, mok := val.(map[string]interface{})
 		// treat empty dir as not found result.
 		if mok && len(m) == 0 && !n.IsRoot() {
-			return nil, false
+			return nil
 		} else {
-			return n.GetValue(), true
+			return val
 		}
 	}
 
-	return nil, false
+	return nil
 }
 
 // Put creates or update the node at nodePath, value should a map[string]interface{} or a string
@@ -158,6 +158,12 @@ func (s *store) internalPut(nodePath string, value string) *node {
 
 	// walk through the nodePath, create dirs and get the last directory node
 	d := s.walk(dirName, s.checkDir)
+
+	// skip empty node name.
+	if nodeName == "" {
+		return d
+	}
+
 	n := d.GetChild(nodeName)
 
 	if n != nil {
@@ -202,6 +208,10 @@ func (s *store) internalGet(nodePath string) *node {
 // If it does not exist, this function will create a new directory and return the pointer to that node.
 // If it is a file, this function will return error.
 func (s *store) checkDir(parent *node, dirName string) *node {
+	// skip empty node name.
+	if dirName == "" {
+		return parent
+	}
 	node := parent.GetChild(dirName)
 
 	if node != nil {
