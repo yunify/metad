@@ -327,8 +327,8 @@ func rootHandler(w http.ResponseWriter, req *http.Request) {
 	if nodePath == "" {
 		nodePath = "/"
 	}
-	val, ok := metadataRepo.Root(clientIP, nodePath)
-	if !ok {
+	val := metadataRepo.Root(clientIP, nodePath)
+	if val != nil {
 		log.Warning("%s not found %s", nodePath, clientIP)
 		respondError(w, req, "Not found", http.StatusNotFound)
 	} else {
@@ -345,8 +345,8 @@ func selfHandler(w http.ResponseWriter, req *http.Request) {
 	if nodePath == "" {
 		nodePath = "/"
 	}
-	val, ok := metadataRepo.Self(clientIP, nodePath)
-	if !ok {
+	val := metadataRepo.Self(clientIP, nodePath)
+	if val != nil {
 		log.Warning("self not found clientIP:%s, requestPath:%s", clientIP, nodePath)
 		respondError(w, req, "Not found", http.StatusNotFound)
 	} else {
