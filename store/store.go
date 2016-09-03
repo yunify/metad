@@ -20,7 +20,7 @@ type Store interface {
 	Delete(nodePath string)
 	// PutBulk value should be a flatmap
 	PutBulk(nodePath string, value map[string]string)
-	Watch(nodePath string) Watcher
+	Watch(nodePath ...string) Watcher
 	// Json output store as json
 	Json() string
 }
@@ -103,25 +103,36 @@ func (s *store) Delete(nodePath string) {
 	n.Remove()
 }
 
-func (s *store) Watch(nodePath string) Watcher {
+func (s *store) Watch(nodePaths ...string) Watcher {
 	s.worldLock.Lock()
 	defer s.worldLock.Unlock()
-	var n *node
-	if nodePath == "/" {
-		n = s.Root
-	} else {
+	watchers := make([]Watcher, 0, len(nodePaths))
+	for _, nodePath := range nodePaths {
+		var n *node
+		if nodePath == "/" {
+			n = s.Root
+		} else {
 
-		dirName, nodeName := path.Split(nodePath)
+			dirName, nodeName := path.Split(nodePath)
 
-		// walk through the nodePath, create dirs and get the last directory node
-		d := s.walk(dirName, s.checkDir)
-		n = d.GetChild(nodeName)
-		if n == nil {
-			// if watch node not exist, create a empty dir.
-			n = newDir(s, nodeName, d)
+			// walk through the nodePath, create dirs and get the last directory node
+			d := s.walk(dirName, s.checkDir)
+			n = d.GetChild(nodeName)
+			if n == nil {
+				// if watch node not exist, create a empty dir.
+				n = newDir(s, nodeName, d)
+			}
 		}
+		watchers = append(watchers, n.Watch())
 	}
-	return n.Watch()
+	c := len(watchers)
+	if c == 0 {
+		return nil
+	} else if c == 1 {
+		return watchers[0]
+	} else {
+		return newAggregateWatcher(watchers)
+	}
 }
 
 func (s *store) Json() string {

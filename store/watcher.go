@@ -52,3 +52,38 @@ func (w *watcher) Remove() {
 		w.remove()
 	}
 }
+
+type aggregateWatcher struct {
+	watchers  []Watcher
+	eventChan chan *Event
+}
+
+func newAggregateWatcher(watchers []Watcher) *aggregateWatcher {
+	eventChan := make(chan *Event, len(watchers))
+	for _, watcher := range watchers {
+		go func() {
+			for {
+				select {
+				case event, ok := <-watcher.EventChan():
+					if ok {
+						eventChan <- event
+					} else {
+						return
+					}
+				}
+			}
+		}()
+	}
+	return &aggregateWatcher{watchers: watchers, eventChan: eventChan}
+}
+
+func (w *aggregateWatcher) EventChan() chan *Event {
+	return w.eventChan
+}
+
+func (w *aggregateWatcher) Remove() {
+	for _, watcher := range w.watchers {
+		watcher.Remove()
+	}
+	close(w.eventChan)
+}

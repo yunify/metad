@@ -10,6 +10,7 @@ import (
 	"path"
 	"reflect"
 	"strings"
+	"time"
 )
 
 type MetadataRepo struct {
@@ -69,7 +70,7 @@ func (r *MetadataRepo) StopSync() {
 func (r *MetadataRepo) Root(clientIP string, nodePath string) interface{} {
 	log.Debug("Get clientIP:%s nodePath:%s", clientIP, nodePath)
 
-	nodePath = path.Clean(path.Join("/", nodePath))
+	nodePath = path.Join("/", nodePath)
 	if r.onlySelf {
 		if nodePath == "/" {
 			val := make(map[string]interface{})
@@ -101,9 +102,71 @@ func (r *MetadataRepo) Root(clientIP string, nodePath string) interface{} {
 }
 
 func (r *MetadataRepo) Watch(clientIP string, nodePath string) interface{} {
-	w := r.data.Watch(nodePath)
-	defer w.Remove()
-	select {}
+	nodePath = path.Join("/", nodePath)
+
+	if r.onlySelf {
+		if nodePath == "/" {
+			return r.WatchSelf(clientIP, "/")
+		} else {
+			return nil
+		}
+	} else {
+		w := r.data.Watch(nodePath)
+		defer w.Remove()
+		return watcherToResult(w)
+	}
+}
+
+func watcherToResult(watcher store.Watcher) interface{} {
+	m := make(map[string]interface{})
+	var tick <-chan time.Time = nil
+
+	for {
+		var timeout bool = false
+		select {
+		case e := <-watcher.EventChan():
+			m[e.Path] = fmt.Sprintf("%s:%s", e.Action, e.Value)
+			tick = time.Tick(50 * time.Millisecond)
+		case <-tick:
+			timeout = true
+		}
+		if timeout {
+			break
+		}
+	}
+	return m
+}
+
+func (r *MetadataRepo) WatchSelf(clientIP string, nodePath string) interface{} {
+	nodePath = path.Join(clientIP, "/", nodePath)
+	mappingData := r.GetMapping(nodePath)
+	if mappingData == nil {
+		return nil
+	}
+	mapping, mok := mappingData.(map[string]interface{})
+	if !mok {
+		dataNodePath := fmt.Sprintf("%s", mapping)
+		w := r.data.Watch(dataNodePath)
+		return watcherToResult(w)
+	} else {
+		nodePaths := make([]string, 0)
+		nodePaths = getMappingValues(mapping, nodePaths)
+		w := r.data.Watch(nodePaths...)
+		return watcherToResult(w)
+	}
+}
+
+func getMappingValues(mapping map[string]interface{}, values []string) []string {
+	for _, v := range mapping {
+		m, mok := v.(map[string]interface{})
+		if mok {
+			return getMappingValues(m, values)
+		} else {
+			dataNodePath := fmt.Sprintf("%s", m)
+			values = append(values, dataNodePath)
+		}
+	}
+	return values
 }
 
 func (r *MetadataRepo) Self(clientIP string, nodePath string) interface{} {

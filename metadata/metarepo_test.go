@@ -331,6 +331,45 @@ func TestMetarepoRoot(t *testing.T) {
 	metarepo.StopSync()
 }
 
+func TestWatch(t *testing.T) {
+	prefix := fmt.Sprintf("/prefix%v", rand.Intn(1000))
+	group := fmt.Sprintf("/group%v", rand.Intn(1000))
+	nodes := backends.GetDefaultBackends(backend)
+
+	config := backends.Config{
+		Backend:      backend,
+		BackendNodes: nodes,
+		Prefix:       prefix,
+		Group:        group,
+	}
+	storeClient, err := backends.New(config)
+	assert.NoError(t, err)
+
+	metarepo := New(false, storeClient)
+	metarepo.DeleteMapping("/")
+	metarepo.DeleteData("/")
+
+	ch := make(chan interface{})
+
+	go func() {
+		ch <- metarepo.Watch("192.168.1.1", "/")
+	}()
+
+	FillTestData(metarepo)
+
+	metarepo.StartSync()
+	time.Sleep(sleepTime)
+
+	//println(metarepo.data.Json())
+
+	result := <-ch
+
+	m, mok := result.(map[string]interface{})
+	assert.True(t, mok)
+	assert.Equal(t, maxNode*2, len(m))
+
+}
+
 func FillTestData(metarepo *MetadataRepo) map[string]string {
 	nodes := make(map[string]interface{})
 	for i := 0; i < maxNode; i++ {
