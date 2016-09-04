@@ -350,6 +350,7 @@ func TestWatch(t *testing.T) {
 	metarepo.DeleteData("/")
 
 	ch := make(chan interface{})
+	defer close(ch)
 
 	go func() {
 		ch <- metarepo.Watch("192.168.1.1", "/")
@@ -366,8 +367,94 @@ func TestWatch(t *testing.T) {
 
 	m, mok := result.(map[string]interface{})
 	assert.True(t, mok)
-	assert.Equal(t, maxNode*2, len(m))
+	//println(fmt.Sprintf("%v", m))
+	assert.Equal(t, 1, len(m))
+	assert.Equal(t, maxNode*2, len(flatmap.Flatten(m)))
 
+	//test watch leaf node
+
+	go func() {
+		ch <- metarepo.Watch("192.168.1.1", "/nodes/1/name")
+	}()
+	time.Sleep(sleepTime)
+
+	metarepo.PutData("/nodes/1/name", "n1", false)
+	result = <-ch
+	assert.Equal(t, "UPDATE|n1", result)
+}
+
+func TestWatchSelf(t *testing.T) {
+	prefix := fmt.Sprintf("/prefix%v", rand.Intn(1000))
+	group := fmt.Sprintf("/group%v", rand.Intn(1000))
+	nodes := backends.GetDefaultBackends(backend)
+
+	config := backends.Config{
+		Backend:      backend,
+		BackendNodes: nodes,
+		Prefix:       prefix,
+		Group:        group,
+	}
+	storeClient, err := backends.New(config)
+	assert.NoError(t, err)
+
+	metarepo := New(false, storeClient)
+	metarepo.DeleteMapping("/")
+	metarepo.DeleteData("/")
+
+	FillTestData(metarepo)
+	metarepo.StartSync()
+
+	ip := "192.168.1.1"
+
+	err = metarepo.PutMapping(ip, map[string]interface{}{
+		"node": "/nodes/1",
+	}, true)
+	assert.NoError(t, err)
+
+	time.Sleep(sleepTime)
+
+	ch := make(chan interface{})
+	defer close(ch)
+
+	go func() {
+		ch <- metarepo.WatchSelf("192.168.1.1", "/")
+	}()
+	time.Sleep(sleepTime)
+	//test data change
+
+	err = metarepo.PutData("/nodes/1", map[string]interface{}{
+		"name": "n1",
+		"ip":   "192.168.2.1",
+	}, false)
+	assert.NoError(t, err)
+
+	//println(metarepo.data.Json())
+
+	result := <-ch
+
+	m, mok := result.(map[string]interface{})
+	assert.True(t, mok)
+	println(fmt.Sprintf("%v", m))
+	fmap := flatmap.Flatten(m)
+	assert.Equal(t, fmap["/node/name"], "UPDATE|n1")
+	assert.Equal(t, fmap["/node/ip"], "UPDATE|192.168.2.1")
+
+	// test watch self subdir
+	go func() {
+		ch <- metarepo.WatchSelf("192.168.1.1", "/node")
+	}()
+
+	time.Sleep(sleepTime)
+
+	err = metarepo.DeleteData("/nodes/1/name")
+	assert.NoError(t, err)
+
+	result = <-ch
+
+	m, mok = result.(map[string]interface{})
+	assert.True(t, mok)
+	//println(fmt.Sprintf("%v", m))
+	assert.Equal(t, m["name"], "DELETE|n1")
 }
 
 func FillTestData(metarepo *MetadataRepo) map[string]string {

@@ -327,13 +327,23 @@ func rootHandler(w http.ResponseWriter, req *http.Request) {
 	if nodePath == "" {
 		nodePath = "/"
 	}
-	val := metadataRepo.Root(clientIP, nodePath)
-	if val == nil {
+	wait := strings.ToLower(req.FormValue("wait")) == "true"
+	var result interface{}
+	if wait {
+		change := strings.ToLower(req.FormValue("change")) != "false"
+		result = metadataRepo.Watch(clientIP, nodePath)
+		if !change {
+			result = metadataRepo.Root(clientIP, nodePath)
+		}
+	} else {
+		result = metadataRepo.Root(clientIP, nodePath)
+	}
+	if result == nil {
 		log.Warning("%s not found %s", nodePath, clientIP)
 		respondError(w, req, "Not found", http.StatusNotFound)
 	} else {
 		log.Info("%s %s OK", nodePath, clientIP)
-		respondSuccess(w, req, val)
+		respondSuccess(w, req, result)
 	}
 
 }
@@ -345,13 +355,23 @@ func selfHandler(w http.ResponseWriter, req *http.Request) {
 	if nodePath == "" {
 		nodePath = "/"
 	}
-	val := metadataRepo.Self(clientIP, nodePath)
-	if val == nil {
+	wait := strings.ToLower(req.FormValue("wait")) == "true"
+	var result interface{}
+	if wait {
+		change := strings.ToLower(req.FormValue("change")) != "false"
+		result = metadataRepo.WatchSelf(clientIP, nodePath)
+		if !change {
+			result = metadataRepo.Self(clientIP, nodePath)
+		}
+	} else {
+		result = metadataRepo.Self(clientIP, nodePath)
+	}
+	if result == nil {
 		log.Warning("self not found clientIP:%s, requestPath:%s", clientIP, nodePath)
 		respondError(w, req, "Not found", http.StatusNotFound)
 	} else {
 		log.Info("/self/%s %s OK", nodePath, clientIP)
-		respondSuccess(w, req, val)
+		respondSuccess(w, req, result)
 	}
 }
 

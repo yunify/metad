@@ -6,6 +6,7 @@ import (
 	"github.com/yunify/metad/backends"
 	"github.com/yunify/metad/log"
 	"github.com/yunify/metad/store"
+	"github.com/yunify/metad/util/flatmap"
 	"net"
 	"path"
 	"reflect"
@@ -112,61 +113,78 @@ func (r *MetadataRepo) Watch(clientIP string, nodePath string) interface{} {
 		}
 	} else {
 		w := r.data.Watch(nodePath)
-		defer w.Remove()
-		return watcherToResult(w)
+		return watcherToResult(w, nil)
 	}
 }
 
-func watcherToResult(watcher store.Watcher) interface{} {
-	m := make(map[string]interface{})
+func watcherToResult(watcher store.Watcher, stopChan chan struct{}) interface{} {
+	defer watcher.Remove()
+	m := make(map[string]string)
 	var tick <-chan time.Time = nil
 
 	for {
 		var timeout bool = false
 		select {
 		case e := <-watcher.EventChan():
-			m[e.Path] = fmt.Sprintf("%s:%s", e.Action, e.Value)
+			value := fmt.Sprintf("%s|%s", e.Action, e.Value)
+			// if event is one leaf node, just return value.
+			if e.Path == "/" {
+				return value
+			}
+			m[e.Path] = value
 			tick = time.Tick(50 * time.Millisecond)
 		case <-tick:
 			timeout = true
+		case <-stopChan:
+			//when stop, return empty map.
+			return map[string]interface{}{}
 		}
 		if timeout {
 			break
 		}
 	}
-	return m
+	return flatmap.Expand(m, "/")
 }
 
 func (r *MetadataRepo) WatchSelf(clientIP string, nodePath string) interface{} {
 	nodePath = path.Join(clientIP, "/", nodePath)
+	log.Debug("WatchSelf nodePath: %s", nodePath)
+
 	mappingData := r.GetMapping(nodePath)
 	if mappingData == nil {
 		return nil
 	}
+	mappingWatcher := r.mapping.Watch(nodePath)
+	defer mappingWatcher.Remove()
+
+	stopChan := make(chan struct{})
+	defer close(stopChan)
+
+	go func() {
+		select {
+		case _, ok := <-mappingWatcher.EventChan():
+			if ok {
+				stopChan <- struct{}{}
+			}
+		}
+	}()
+
 	mapping, mok := mappingData.(map[string]interface{})
 	if !mok {
-		dataNodePath := fmt.Sprintf("%s", mapping)
+		dataNodePath := fmt.Sprintf("%s", mappingData)
+		//log.Debug("watcher: %v", dataNodePath)
 		w := r.data.Watch(dataNodePath)
-		return watcherToResult(w)
+		return watcherToResult(w, stopChan)
 	} else {
-		nodePaths := make([]string, 0)
-		nodePaths = getMappingValues(mapping, nodePaths)
-		w := r.data.Watch(nodePaths...)
-		return watcherToResult(w)
-	}
-}
-
-func getMappingValues(mapping map[string]interface{}, values []string) []string {
-	for _, v := range mapping {
-		m, mok := v.(map[string]interface{})
-		if mok {
-			return getMappingValues(m, values)
-		} else {
-			dataNodePath := fmt.Sprintf("%s", m)
-			values = append(values, dataNodePath)
+		flatMapping := flatmap.Flatten(mapping)
+		watchers := make(map[string]store.Watcher)
+		for k, v := range flatMapping {
+			watchers[k] = r.data.Watch(v)
 		}
+		//log.Debug("aggWatcher: %v", watchers)
+		aggWatcher := store.NewAggregateWatcher(watchers)
+		return watcherToResult(aggWatcher, stopChan)
 	}
-	return values
 }
 
 func (r *MetadataRepo) Self(clientIP string, nodePath string) interface{} {

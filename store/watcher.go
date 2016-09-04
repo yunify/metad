@@ -1,8 +1,10 @@
 package store
 
+import "path"
+
 const (
-	Update = "update"
-	Delete = "delete"
+	Update = "UPDATE"
+	Delete = "DELETE"
 )
 
 type Event struct {
@@ -54,19 +56,19 @@ func (w *watcher) Remove() {
 }
 
 type aggregateWatcher struct {
-	watchers  []Watcher
+	watchers  map[string]Watcher
 	eventChan chan *Event
 }
 
-func newAggregateWatcher(watchers []Watcher) *aggregateWatcher {
+func NewAggregateWatcher(watchers map[string]Watcher) Watcher {
 	eventChan := make(chan *Event, len(watchers))
-	for _, watcher := range watchers {
+	for pathPrefix, watcher := range watchers {
 		go func() {
 			for {
 				select {
 				case event, ok := <-watcher.EventChan():
 					if ok {
-						eventChan <- event
+						eventChan <- newEvent(event.Action, path.Join(pathPrefix, event.Path), event.Value)
 					} else {
 						return
 					}
