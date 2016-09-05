@@ -1,15 +1,21 @@
 language: go
 go:
 - 1.7
-#- tip
 before_install:
-  # install etcd
-  - wget https://github.com/coreos/etcd/releases/download/v3.0.6/etcd-v3.0.6-linux-amd64.tar.gz
-  - tar xzf etcd-v3.0.6-linux-amd64.tar.gz
-  - sudo mv etcd-v3.0.6-linux-amd64/etcd /bin/
-  - etcd &
+- wget https://github.com/coreos/etcd/releases/download/v3.0.6/etcd-v3.0.6-linux-amd64.tar.gz
+- tar xzf etcd-v3.0.6-linux-amd64.tar.gz
+- sudo mv etcd-v3.0.6-linux-amd64/etcd /bin/
+- etcd &
 install:
-- ./build
+- "./build"
 - sudo ./install
 script:
-  - ./test
+- "./test"
+deploy:
+  provider: releases
+  api_key:
+    secure: VlTP7AlzVV2PuCU+hRPMYW5H050PvMufxPLNmurqziDUlHSDmvyWZc6cEicdXbZNI7ANr9R6a+OYUjtZ/uteK6uMkKzMjfWjZCPtu0XXcp23N0ortFgsa4wvbRvC5lHOAdSjDXusCnPebeBfvGcphkws1Ps2Z3OfsfKEAKr5ZUNgI3z7T+wH38hIGrR4rSJoedkjWRmHzPYeJZFnfYezgI5LzfWYpFvf6CU0tIYJs8B2BqRoz/c9so1l6So7jeNd/yHDcAN6+hBxv7ruSRCzzHqyfUfBqT2JlaKZrTZygRc4Iu1pBqefJLLQYBB3DfoOTyAegkwS+hICQml2e1lvDX749k/UwNvmEDYptKp6F+OE7SXMIGxcnRL55Vv0l4nG1h5JFJFvTd0MU/jY33cI6p2uRgZ1LT4/jN737t+9FpM+i8+R0tdM0e9xZRrjpHChZqC9PdC6u0s1qyI02+8w9giNpH4MipgNRR3iXNrtya4bOF5VgYqM0kJTHyHtzoh1yyy+UtnW3W1EGDXkQPluHPM7kdo9xPWrWbxAV9idcZUNdpticnn+6WdFCdYT8hrcUZIiuTavlWhzvn+R2dH5bOSdLigS87KDK9oqPTvVW9FU6i9rVT/w+Y1dpwwhHJz+2H7vwgCKnktx9ZhMav09Xqjej88JwX3YKxc7WONny1g=
+  file: bin/metad
+  on:
+    repo: yunify/metad
+    tags: true
