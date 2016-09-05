@@ -14,7 +14,7 @@ group: default
 # Address to listen to (TCP)
 listen: :80
 # Address to listen to for manage requests (TCP)
-listen_manage: 127.0.0.1:8112
+listen_manage: 127.0.0.1:9611
 # Use Basic Auth to authenticate (only used with -backend=etcd)
 basic_auth: true
 # The client ca keys

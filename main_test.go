@@ -18,7 +18,7 @@ func TestConfigFile(t *testing.T) {
 		OnlySelf:     true,
 		Group:        "default",
 		Listen:       ":8080",
-		ListenManage: "127.0.0.1:8112",
+		ListenManage: "127.0.0.1:9611",
 		BasicAuth:    true,
 		ClientCaKeys: "/opt/metad/client_ca_keys",
 		ClientCert:   "/opt/metad/client_cert",

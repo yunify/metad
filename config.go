@@ -83,7 +83,7 @@ func init() {
 	flag.BoolVar(&onlySelf, "only_self", false, "Only support self metadata query.")
 	flag.StringVar(&group, "group", "default", "The metad's group name, same group share same mapping config from backend.")
 	flag.StringVar(&listen, "listen", ":80", "Address to listen to (TCP)")
-	flag.StringVar(&listenManage, "listen_manage", "127.0.0.1:8112", "Address to listen to for manage requests (TCP)")
+	flag.StringVar(&listenManage, "listen_manage", "127.0.0.1:9611", "Address to listen to for manage requests (TCP)")
 	flag.BoolVar(&basicAuth, "basic_auth", false, "Use Basic Auth to authenticate (only used with -backend=etcd)")
 	flag.StringVar(&clientCaKeys, "client_ca_keys", "", "The client ca keys")
 	flag.StringVar(&clientCert, "client_cert", "", "The client cert")
@@ -102,7 +102,7 @@ func initConfig() error {
 		Group:        "default",
 		LogLevel:     "info",
 		Listen:       ":80",
-		ListenManage: "127.0.0.1:8112",
+		ListenManage: "127.0.0.1:9611",
 	}
 	if configFile != "" {
 		err := loadConfigFile(configFile, &config)

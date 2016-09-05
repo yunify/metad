@@ -235,7 +235,7 @@ nodes:
 register self mapping
 
 ```
-curl http://127.0.0.1:8112/v1/register -d 'ip=192.168.11.1&mapping={"node":"/nodes/1"}'
+curl http://127.0.0.1:9611/v1/register -d 'ip=192.168.11.1&mapping={"node":"/nodes/1"}'
 
 OK
 ```

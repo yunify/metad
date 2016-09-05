@@ -33,7 +33,7 @@ metad
 
 ## Manage API
 
-Manage API default port is 127.0.0.1:8112
+Manage API default port is 127.0.0.1:9611
 
 * /v1/data[/{nodePath}] manage metadata
     * GET show metadata.
@@ -80,35 +80,35 @@ done
 * fill data by metad
 
 ```
-curl -X POST -H "Content-Type: application/json" http://127.0.0.1:8112/v1/data -d '{"nodes":{"1":{"ip":"192.168.1.1","name":"node1"},"2":{"ip":"192.168.1.2","name":"node2"},"3":{"ip":"192.168.1.3","name":"node3"},"4":{"ip":"192.168.1.4","name":"node4"},"5":{"ip":"192.168.1.5","name":"node5"}}}'
+curl -X POST -H "Content-Type: application/json" http://127.0.0.1:9611/v1/data -d '{"nodes":{"1":{"ip":"192.168.1.1","name":"node1"},"2":{"ip":"192.168.1.2","name":"node2"},"3":{"ip":"192.168.1.3","name":"node3"},"4":{"ip":"192.168.1.4","name":"node4"},"5":{"ip":"192.168.1.5","name":"node5"}}}'
 
 ```
 
 * update and delete metadata
 
 ```
-curl -X PUT -H "Content-Type: application/json" http://127.0.0.1:8112/v1/data/nodes -d '{"6":{"ip":"192.168.1.6","name":"node6"}}'
+curl -X PUT -H "Content-Type: application/json" http://127.0.0.1:9611/v1/data/nodes -d '{"6":{"ip":"192.168.1.6","name":"node6"}}'
 
 
-curl -H "Accept: application/json" http://127.0.0.1:8112/v1/data
+curl -H "Accept: application/json" http://127.0.0.1:9611/v1/data
 
 {"nodes":{"1":{"ip":"192.168.1.1","name":"node1"},"2":{"ip":"192.168.1.2","name":"node2"},"3":{"ip":"192.168.1.3","name":"node3"},"4":{"ip":"192.168.1.4","name":"node4"},"5":{"ip":"192.168.1.5","name":"node5"},"6":{"ip":"192.168.1.6","name":"node6"}}}
 
 # add label to /nodes/6
 
-curl -X PUT -H "Content-Type: application/json" http://127.0.0.1:8112/v1/data/nodes/6 -d '{"label":{"key1":"value1"}}'
+curl -X PUT -H "Content-Type: application/json" http://127.0.0.1:9611/v1/data/nodes/6 -d '{"label":{"key1":"value1"}}'
 
 # update leaf node value, value should be a json value, so string must have quota
 
-curl -X PUT -H "Content-Type: application/json" http://127.0.0.1:8112/v1/data/nodes/6/name -d '"new_node6"'
+curl -X PUT -H "Content-Type: application/json" http://127.0.0.1:9611/v1/data/nodes/6/name -d '"new_node6"'
 
 # delete sub nodes, /nodes/6/name will keep.
 
-curl -X DELETE http://127.0.0.1:8112/v1/data/nodes/6?subs=ip,labels
+curl -X DELETE http://127.0.0.1:9611/v1/data/nodes/6?subs=ip,labels
 
 # delete /nodes/6 dir
 
-curl -X DELETE http://127.0.0.1:8112/v1/data/6
+curl -X DELETE http://127.0.0.1:9611/v1/data/6
 
 
 ```
@@ -210,7 +210,7 @@ mapping create
 
 ```
 
-curl -H "Content-Type: application/json" -X POST http://127.0.0.1:8112/v1/mapping -d '{"192.168.1.1":{"node":"/nodes/1"}, "192.168.1.2":{"node":"/nodes/2"}, "192.168.1.3":{"node":"/nodes/3"}}'
+curl -H "Content-Type: application/json" -X POST http://127.0.0.1:9611/v1/mapping -d '{"192.168.1.1":{"node":"/nodes/1"}, "192.168.1.2":{"node":"/nodes/2"}, "192.168.1.3":{"node":"/nodes/3"}}'
 
 ```
 
@@ -218,7 +218,7 @@ show mapping
 
 ```
 
-curl -H "Accept: application/json" http://127.0.0.1:8112/v1/mapping
+curl -H "Accept: application/json" http://127.0.0.1:9611/v1/mapping
 
 {"192.168.1.1":{"node":"/nodes/1"},"192.168.1.2":{"node":"/nodes/2"},"192.168.1.3":{"node":"/nodes/3"}}
 ```
@@ -241,19 +241,19 @@ url -H "Accept: application/json" -H "X-Forwarded-For: 192.168.1.1" http://127.0
 update mapping
 
 ```
-curl -H "Content-Type: application/json" -X PUT http://127.0.0.1:8112/v1/mapping/192.168.1.1 -d '{"nodes":"/nodes"}'
+curl -H "Content-Type: application/json" -X PUT http://127.0.0.1:9611/v1/mapping/192.168.1.1 -d '{"nodes":"/nodes"}'
 
 OK
 
-curl -H "Accept: application/json" http://127.0.0.1:8112/v1/mapping
+curl -H "Accept: application/json" http://127.0.0.1:9611/v1/mapping
 
 {"192.168.1.1":{"node":"/nodes/1","nodes":"/nodes"}}
 
 
-curl -H "Content-Type: application/json" -X PUT http://127.0.0.1:8112/v1/mapping/192.168.1.1/node2 -d '"/nodes/2"'
+curl -H "Content-Type: application/json" -X PUT http://127.0.0.1:9611/v1/mapping/192.168.1.1/node2 -d '"/nodes/2"'
 
 
-curl -H "Accept: application/json" http://127.0.0.1:8112/v1/mapping
+curl -H "Accept: application/json" http://127.0.0.1:9611/v1/mapping
 
 {"192.168.1.1":{"node":"/nodes/1","node2":"/nodes/2","nodes":"/nodes"}}
 ```
@@ -263,18 +263,18 @@ delete mapping
 ```
 # delete mapping key
 
-curl -X DELETE http://127.0.0.1:8112/v1/mapping/192.168.1.1/node2
+curl -X DELETE http://127.0.0.1:9611/v1/mapping/192.168.1.1/node2
 
 # delete dir and subs
 
-curl -X DELETE http://127.0.0.1:8112/v1/mapping/192.168.1.1
+curl -X DELETE http://127.0.0.1:9611/v1/mapping/192.168.1.1
 
 OK
 
 # delete subs
 
-curl -X DELETE http://127.0.0.1:8112/v1/mapping?subs=192.168.1.2,192.168.1.3
+curl -X DELETE http://127.0.0.1:9611/v1/mapping?subs=192.168.1.2,192.168.1.3
 
-curl http://127.0.0.1:8112/v1/mapping
+curl http://127.0.0.1:9611/v1/mapping
 
 ```

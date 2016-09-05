@@ -314,6 +314,8 @@ func TestMetarepoRoot(t *testing.T) {
 	val := metarepo.Root(ip, "/")
 	mapVal, mok := val.(map[string]interface{})
 	assert.True(t, mok)
+	//println(fmt.Sprintf("%v", mapVal))
+	assert.NotNil(t, mapVal["nodes"])
 	selfVal := mapVal["self"]
 	assert.NotNil(t, selfVal)
 	assert.True(t, len(mapVal) > 1)
