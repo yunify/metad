@@ -14,7 +14,7 @@ metad
 
 ## Getting Started
 
-Before we begin be sure to [download and install confd](docs/installation.md).
+Before we begin be sure to [download and install metad](docs/installation.md).
 
 * [quick start guide](docs/quick-start-guide.md)
 
