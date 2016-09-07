@@ -35,6 +35,6 @@ after_success:
     - docker build -t qingcloud/metad .
     - if [ "$TRAVIS_BRANCH" == "master" ]; then
         docker push qingcloud/metad;
-      else:
+      else
         docker push qingcloud/metad:$TRAVIS_BRANCH;
       fi
