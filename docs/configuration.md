@@ -5,7 +5,7 @@ The metad configuration file is written in YAML, and is optional. The command li
 Configuration option and command line flags table
 
 | Configuration Option          |Command line flag | Default        | Description  |
-| ------------------------------|:----------------:| :--------------|--------------|
+| ------------------------------|:-----------------| :--------------|--------------|
 |                               | --version        | false          |Show metad version|
 |                               | --config         |                |The configuration file path|
 | backend                       | --backend        | etcdv3         |The metad backend type|

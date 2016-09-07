@@ -97,7 +97,7 @@ func initConfig() error {
 
 	// Set defaults.
 	config = Config{
-		Backend:      "etcdv3",
+		Backend:      "local",
 		Prefix:       "",
 		Group:        "default",
 		LogLevel:     "info",

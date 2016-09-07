@@ -44,17 +44,15 @@ $ sudo ./install
 #### Building from Source by docker
 
 ```
-$ docker build -t metad_builder -f Dockerfile.build .
-$ docker run -ti --rm -v $(pwd):/app metad_builder ./build
+$ docker run -ti --rm -v $(pwd):/app qingcloud/metad_builder ./build
 ```
-
 
 The above docker commands will produce binary in the local bin directory.
 
-#### Building release docker image
+#### Run by docker image
 
 ```
-$ docker build -t metad .
+$ docker run -it qingcloud/metad
 ```
 
 ### Next Steps
