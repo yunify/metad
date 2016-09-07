@@ -139,7 +139,7 @@ func TestMetarepoMapping(t *testing.T) {
 	val = metarepo.GetMapping("/192.168.1.2")
 	assert.NotNil(t, val)
 
-	p := rand.Intn(maxNode)
+	p := 4
 	ip := fmt.Sprintf("192.168.1.%v", p)
 
 	expectMapping0 := map[string]interface{}{
