@@ -73,15 +73,15 @@ type Config struct {
 }
 
 func init() {
-	flag.BoolVar(&printVersion, "version", false, "Show version")
-	flag.StringVar(&configFile, "config", "", "Cconfig file")
-	flag.StringVar(&backend, "backend", "etcdv3", "Backend to use")
-	flag.StringVar(&logLevel, "log_level", "info", "Set log level: debug|info|warning")
+	flag.BoolVar(&printVersion, "version", false, "Show metad version")
+	flag.StringVar(&configFile, "config", "", "The configuration file path")
+	flag.StringVar(&backend, "backend", "local", "The metad backend type")
+	flag.StringVar(&logLevel, "log_level", "info", "Log level for metad print out: debug|info|warning")
 	flag.StringVar(&pidFile, "pid_file", "", "PID to write to")
 	flag.BoolVar(&enableXff, "xff", false, "X-Forwarded-For header support")
-	flag.StringVar(&prefix, "prefix", "", "Default backend key prefix")
-	flag.BoolVar(&onlySelf, "only_self", false, "Only support self metadata query.")
-	flag.StringVar(&group, "group", "default", "The metad's group name, same group share same mapping config from backend.")
+	flag.StringVar(&prefix, "prefix", "", "Backend key path prefix")
+	flag.BoolVar(&onlySelf, "only_self", false, "Only support self metadata query")
+	flag.StringVar(&group, "group", "default", "The metad's group name, same group share same mapping config from backend")
 	flag.StringVar(&listen, "listen", ":80", "Address to listen to (TCP)")
 	flag.StringVar(&listenManage, "listen_manage", "127.0.0.1:9611", "Address to listen to for manage requests (TCP)")
 	flag.BoolVar(&basicAuth, "basic_auth", false, "Use Basic Auth to authenticate (only used with -backend=etcd)")
