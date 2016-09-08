@@ -20,9 +20,9 @@ Before we begin be sure to [download and install metad](docs/installation.md).
 
 ## Next steps
 
-* [metad configuration](docs/configuration.md)
-* [metad API document](docs/api.md)
-* [work with confd](docs/confd.md)
+* [Metad configuration](docs/configuration.md)
+* [Metad API document](docs/api.md)
+* [Working with confd](docs/confd.md)
 
 
 Check out the [docs directory](docs) for more docs.
