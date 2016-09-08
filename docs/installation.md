@@ -7,13 +7,15 @@ Currently metad ships binaries for OS X and Linux 64bit systems. You can downloa
 #### OS X
 
 ```
-$ wget https://github.com/yunify/metad/releases/download/v1.0-alpha.4/metad-darwin-amd64
+$ wget https://github.com/yunify/metad/releases/download/v1.0-alpha.6/metad-darwin-amd64.tar.gz
+$ tar -zxvf metad-darwin-amd64.tar.gz
 ```
 
 #### Linux
 
 ```
-$ wget https://github.com/yunify/metad/releases/download/v1.0-alpha.4/metad-linux-amd64
+$ wget https://github.com/yunify/metad/releases/download/v1.0-alpha.6/metad-linux-amd64.tar.gz
+$ tar -zxvf metad-linux-amd64.tar.gz
 ```
 
 #### Building from Source

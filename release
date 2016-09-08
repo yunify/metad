@@ -4,11 +4,12 @@ source ./env
 
 echo "Release metad linux version ..."
 mkdir -p bin/linux
-env GOOS=linux GOARCH=amd64 go build -o bin/linux/metad-linux-amd64 .
-
+env GOOS=linux GOARCH=amd64 go build -o bin/linux/metad .
+tar -C bin/linux/ -czf bin/linux/metad-linux-amd64.tar.gz metad
 
 echo "Release metad darwin version ..."
-mkdir -p bin/drawin
-env GOOS=darwin GOARCH=amd64 go build -o bin/darwin/metad-darwin-amd64 .
+mkdir -p bin/darwin
+env GOOS=darwin GOARCH=amd64 go build -o bin/darwin/metad .
+tar -C bin/darwin/ -czf bin/darwin/metad-darwin-amd64.tar.gz metad
 
 ls -lh bin/*
