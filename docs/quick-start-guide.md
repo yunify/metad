@@ -211,7 +211,17 @@ We also show metadata by metad's API. Metad's default output format is text.
 ```
 curl http://127.0.0.1:8080/
 
-nodes/
+/nodes/1/ip      192.168.1.1
+/nodes/1/name    nn_node1
+/nodes/2/ip      192.168.1.2
+/nodes/2/name    node2
+/nodes/3/ip      192.168.1.3
+/nodes/3/name    node3
+/nodes/4/ip      192.168.1.4
+/nodes/4/name    node4
+/nodes/5/ip      192.168.1.5
+/nodes/5/name    node5
+
 ```
 
 We can add the request header "Accept: application/json", to let metad output json.

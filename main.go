@@ -9,11 +9,11 @@ import (
 	"github.com/yunify/metad/backends"
 	"github.com/yunify/metad/log"
 	"github.com/yunify/metad/metadata"
+	"github.com/yunify/metad/util/flatmap"
 	yaml "gopkg.in/yaml.v2"
 	"io"
 	"net"
 	"net/http"
-	"net/url"
 	"os"
 	"os/signal"
 	"sort"
@@ -450,22 +450,14 @@ func respondText(w http.ResponseWriter, req *http.Request, val interface{}) {
 			fmt.Fprint(w, "false")
 		}
 	case map[string]interface{}:
-		out := make([]string, len(v))
-		i := 0
-		for k, vv := range v {
-			_, isMap := vv.(map[string]interface{})
-			_, isArray := vv.([]interface{})
-			if isMap || isArray {
-				out[i] = fmt.Sprintf("%s/\n", url.QueryEscape(k))
-			} else {
-				out[i] = fmt.Sprintf("%s\n", url.QueryEscape(k))
-			}
-			i++
+		fm := flatmap.Flatten(v)
+		var keys []string
+		for k := range fm {
+			keys = append(keys, k)
 		}
-
-		sort.Strings(out)
-		for _, vv := range out {
-			fmt.Fprint(w, vv)
+		sort.Strings(keys)
+		for _, k := range keys {
+			fmt.Fprintln(w, k, "\t", fm[k])
 		}
 	default:
 		http.Error(w, "Value is of a type I don't know how to handle", http.StatusInternalServerError)
