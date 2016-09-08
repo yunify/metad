@@ -25,8 +25,7 @@ func (n *Nodes) Set(node string) error {
 }
 
 var (
-	VERSION string = "1.0"
-	metad   *Metad
+	metad *Metad
 
 	printVersion bool
 	logLevel     string

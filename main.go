@@ -21,7 +21,8 @@ func main() {
 	flag.Parse()
 
 	if printVersion {
-		fmt.Printf("%s\n", VERSION)
+		fmt.Printf("version: %s\n", VERSION)
+		fmt.Printf("git version: %s\n", GIT_VERSION)
 		os.Exit(0)
 	}
 	var config *Config

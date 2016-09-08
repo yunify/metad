@@ -2,3 +2,4 @@
 
 ORG_PATH="github.com/yunify"
 REPO_PATH="${ORG_PATH}/metad"
+./genversion.sh
