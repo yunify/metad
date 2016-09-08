@@ -473,7 +473,16 @@ func respondText(w http.ResponseWriter, req *http.Request, val interface{}) {
 }
 
 func respondJSON(w http.ResponseWriter, req *http.Request, val interface{}) {
-	bytes, err := json.Marshal(val)
+	prettyParam := req.FormValue("pretty")
+	pretty := prettyParam != "" && prettyParam != "false"
+	var bytes []byte
+	var err error
+	if pretty {
+		bytes, err = json.MarshalIndent(val, "", "  ")
+	} else {
+		bytes, err = json.Marshal(val)
+	}
+
 	if err == nil {
 		w.Write(bytes)
 	} else {

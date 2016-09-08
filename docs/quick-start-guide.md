@@ -217,7 +217,7 @@ nodes/
 We can add the request header "Accept: application/json", to let metad output json.
 
 ```
-curl -H "Accept: application/json" http://127.0.0.1:8080/
+curl -H "Accept: application/json" http://127.0.0.1:8080/?pretty=true
 
 {
     "nodes": {
