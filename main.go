@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -11,7 +12,6 @@ import (
 	"github.com/yunify/metad/metadata"
 	"github.com/yunify/metad/util/flatmap"
 	yaml "gopkg.in/yaml.v2"
-	"io"
 	"net"
 	"net/http"
 	"os"
@@ -33,6 +33,25 @@ var (
 
 	resyncChan = make(chan chan error)
 )
+
+type HttpError struct {
+	Status  int
+	Message string
+}
+
+func NewHttpError(status int, Message string) *HttpError {
+	return &HttpError{Status: status, Message: Message}
+}
+
+func NewServerError(error error) *HttpError {
+	return &HttpError{Status: http.StatusInternalServerError, Message: error.Error()}
+}
+
+func (e HttpError) Error() string {
+	return fmt.Sprintf("%s", e.Message)
+}
+
+type handlerFunc func(req *http.Request) (interface{}, *HttpError)
 
 func main() {
 
@@ -73,13 +92,13 @@ func main() {
 
 	router.HandleFunc("/favicon.ico", http.NotFound)
 
-	router.HandleFunc("/self", selfHandler).
+	router.HandleFunc("/self", handlerWrapper(selfHandler)).
 		Methods("GET", "HEAD")
 
-	router.HandleFunc("/self/{nodePath:.*}", selfHandler).
+	router.HandleFunc("/self/{nodePath:.*}", handlerWrapper(selfHandler)).
 		Methods("GET", "HEAD")
 
-	router.HandleFunc("/{nodePath:.*}", rootHandler).
+	router.HandleFunc("/{nodePath:.*}", handlerWrapper(rootHandler)).
 		Methods("GET", "HEAD")
 
 	log.Info("Listening on %s", config.Listen)
@@ -91,7 +110,7 @@ func watchSignals() {
 	signal.Notify(c, syscall.SIGHUP)
 
 	go func() {
-		for _ = range c {
+		for range c {
 			log.Info("Received HUP signal")
 			resyncChan <- nil
 		}
@@ -131,47 +150,44 @@ func watchManage() {
 	manageRouter.HandleFunc("/favicon.ico", http.NotFound)
 
 	v1 := manageRouter.PathPrefix("/v1").Subrouter()
-	v1.HandleFunc("/resync", httpResync).Methods("POST")
+	v1.HandleFunc("/resync", handlerWrapper(httpResync)).Methods("POST")
 
-	v1.HandleFunc("/mapping", mappingGet).Methods("GET")
-	v1.HandleFunc("/mapping", mappingUpdate).Methods("POST", "PUT")
-	v1.HandleFunc("/mapping", mappingDelete).Methods("DELETE")
+	v1.HandleFunc("/mapping", handlerWrapper(mappingGet)).Methods("GET")
+	v1.HandleFunc("/mapping", handlerWrapper(mappingUpdate)).Methods("POST", "PUT")
+	v1.HandleFunc("/mapping", handlerWrapper(mappingDelete)).Methods("DELETE")
 
 	mapping := v1.PathPrefix("/mapping").Subrouter()
 	//mapping.HandleFunc("", mappingGET).Methods("GET")
-	mapping.HandleFunc("/{nodePath:.*}", mappingGet).Methods("GET")
-	mapping.HandleFunc("/{nodePath:.*}", mappingUpdate).Methods("POST", "PUT")
-	mapping.HandleFunc("/{nodePath:.*}", mappingDelete).Methods("DELETE")
+	mapping.HandleFunc("/{nodePath:.*}", handlerWrapper(mappingGet)).Methods("GET")
+	mapping.HandleFunc("/{nodePath:.*}", handlerWrapper(mappingUpdate)).Methods("POST", "PUT")
+	mapping.HandleFunc("/{nodePath:.*}", handlerWrapper(mappingDelete)).Methods("DELETE")
 
-	v1.HandleFunc("/data", dataGet).Methods("GET")
-	v1.HandleFunc("/data", dataUpdate).Methods("POST", "PUT")
-	v1.HandleFunc("/data", dataDelete).Methods("DELETE")
+	v1.HandleFunc("/data", handlerWrapper(dataGet)).Methods("GET")
+	v1.HandleFunc("/data", handlerWrapper(dataUpdate)).Methods("POST", "PUT")
+	v1.HandleFunc("/data", handlerWrapper(dataDelete)).Methods("DELETE")
 
 	data := v1.PathPrefix("/data").Subrouter()
 	//mapping.HandleFunc("", mappingGET).Methods("GET")
-	data.HandleFunc("/{nodePath:.*}", dataGet).Methods("GET")
-	data.HandleFunc("/{nodePath:.*}", dataUpdate).Methods("POST", "PUT")
-	data.HandleFunc("/{nodePath:.*}", dataDelete).Methods("DELETE")
+	data.HandleFunc("/{nodePath:.*}", handlerWrapper(dataGet)).Methods("GET")
+	data.HandleFunc("/{nodePath:.*}", handlerWrapper(dataUpdate)).Methods("POST", "PUT")
+	data.HandleFunc("/{nodePath:.*}", handlerWrapper(dataDelete)).Methods("DELETE")
 
 	log.Info("Listening for Manage on %s", config.ListenManage)
 	go http.ListenAndServe(config.ListenManage, manageRouter)
 }
 
-func httpResync(w http.ResponseWriter, req *http.Request) {
-	log.Debug("Received HTTP resync request")
+func httpResync(req *http.Request) (interface{}, *HttpError) {
 	respChan := make(chan error)
 	resyncChan <- respChan
 	err := <-respChan
-
 	if err == nil {
-		io.WriteString(w, "OK")
+		return nil, nil
 	} else {
-		w.WriteHeader(500)
-		io.WriteString(w, err.Error())
+		return nil, NewServerError(err)
 	}
 }
 
-func dataGet(w http.ResponseWriter, req *http.Request) {
+func dataGet(req *http.Request) (interface{}, *HttpError) {
 	vars := mux.Vars(req)
 	nodePath := vars["nodePath"]
 	if nodePath == "" {
@@ -179,15 +195,13 @@ func dataGet(w http.ResponseWriter, req *http.Request) {
 	}
 	val := metadataRepo.GetData(nodePath)
 	if val == nil {
-		log.Warning("dataGet %s not found", nodePath)
-		respondError(w, req, "Not found", http.StatusNotFound)
+		return nil, NewHttpError(http.StatusNotFound, "Not found")
 	} else {
-		log.Info("dataGet %s OK", nodePath)
-		respondSuccess(w, req, val)
+		return val, nil
 	}
 }
 
-func dataUpdate(w http.ResponseWriter, req *http.Request) {
+func dataUpdate(req *http.Request) (interface{}, *HttpError) {
 	vars := mux.Vars(req)
 	nodePath := vars["nodePath"]
 	if nodePath == "" {
@@ -197,24 +211,24 @@ func dataUpdate(w http.ResponseWriter, req *http.Request) {
 	var data interface{}
 	err := decoder.Decode(&data)
 	if err != nil {
-		respondError(w, req, fmt.Sprintf("invalid json format, error:%s", err.Error()), 400)
+		return nil, NewHttpError(http.StatusBadRequest, fmt.Sprintf("invalid json format, error:%s", err.Error()))
 	} else {
 		// POST means replace old value
 		// PUT means merge to old value
 		replace := "POST" == strings.ToUpper(req.Method)
 		err = metadataRepo.PutData(nodePath, data, replace)
 		if err != nil {
-			msg := fmt.Sprintf("Update data error:%s", err.Error())
-			log.Error("dataUpdate  nodePath:%s, data:%v, error:%s", nodePath, data, err.Error())
-			respondError(w, req, msg, http.StatusInternalServerError)
+			if log.IsDebugEnable() {
+				log.Debug("dataUpdate  nodePath:%s, data:%v, error:%s", nodePath, data, err.Error())
+			}
+			return nil, NewServerError(err)
 		} else {
-			log.Info("dataUpdate %s OK", nodePath)
-			respondSuccessDefault(w, req)
+			return nil, nil
 		}
 	}
 }
 
-func dataDelete(w http.ResponseWriter, req *http.Request) {
+func dataDelete(req *http.Request) (interface{}, *HttpError) {
 	vars := mux.Vars(req)
 	nodePath := vars["nodePath"]
 	if nodePath == "" {
@@ -227,16 +241,13 @@ func dataDelete(w http.ResponseWriter, req *http.Request) {
 	}
 	err := metadataRepo.DeleteData(nodePath, subs...)
 	if err != nil {
-		msg := fmt.Sprintf("Delete data error:%s", err.Error())
-		log.Error("dataDelete  nodePath:%s, error:%s", nodePath, err.Error())
-		respondError(w, req, msg, http.StatusInternalServerError)
+		return nil, NewServerError(err)
 	} else {
-		log.Info("dataDelete %s OK", nodePath)
-		respondSuccessDefault(w, req)
+		return nil, nil
 	}
 }
 
-func mappingGet(w http.ResponseWriter, req *http.Request) {
+func mappingGet(req *http.Request) (interface{}, *HttpError) {
 	vars := mux.Vars(req)
 	nodePath := vars["nodePath"]
 	if nodePath == "" {
@@ -244,15 +255,13 @@ func mappingGet(w http.ResponseWriter, req *http.Request) {
 	}
 	val := metadataRepo.GetMapping(nodePath)
 	if val == nil {
-		log.Warning("mappingGet %s not found", nodePath)
-		respondError(w, req, "Not found", http.StatusNotFound)
+		return nil, NewHttpError(http.StatusNotFound, "Not found")
 	} else {
-		log.Info("mappingGet %s OK", nodePath)
-		respondSuccess(w, req, val)
+		return val, nil
 	}
 }
 
-func mappingUpdate(w http.ResponseWriter, req *http.Request) {
+func mappingUpdate(req *http.Request) (interface{}, *HttpError) {
 	vars := mux.Vars(req)
 	nodePath := vars["nodePath"]
 	if nodePath == "" {
@@ -262,24 +271,24 @@ func mappingUpdate(w http.ResponseWriter, req *http.Request) {
 	var data interface{}
 	err := decoder.Decode(&data)
 	if err != nil {
-		respondError(w, req, fmt.Sprintf("invalid json format, error:%s", err.Error()), 400)
+		return nil, NewHttpError(http.StatusBadRequest, fmt.Sprintf("invalid json format, error:%s", err.Error()))
 	} else {
 		// POST means replace old value
 		// PUT means merge to old value
 		replace := "POST" == strings.ToUpper(req.Method)
 		err = metadataRepo.PutMapping(nodePath, data, replace)
 		if err != nil {
-			msg := fmt.Sprintf("Update mapping error:%s", err.Error())
-			log.Error("mappingUpdate  nodePath:%s, data:%v, error:%s", nodePath, data, err.Error())
-			respondError(w, req, msg, http.StatusInternalServerError)
+			if log.IsDebugEnable() {
+				log.Debug("mappingUpdate  nodePath:%s, data:%v, error:%s", nodePath, data, err.Error())
+			}
+			return nil, NewServerError(err)
 		} else {
-			log.Info("mappingUpdate %s OK", nodePath)
-			respondSuccessDefault(w, req)
+			return nil, nil
 		}
 	}
 }
 
-func mappingDelete(w http.ResponseWriter, req *http.Request) {
+func mappingDelete(req *http.Request) (interface{}, *HttpError) {
 	vars := mux.Vars(req)
 	nodePath := vars["nodePath"]
 	if nodePath == "" {
@@ -292,12 +301,9 @@ func mappingDelete(w http.ResponseWriter, req *http.Request) {
 	}
 	err := metadataRepo.DeleteMapping(nodePath, subs...)
 	if err != nil {
-		msg := fmt.Sprintf("Delete mapping error:%s", err.Error())
-		log.Error("mappingDelete  nodePath:%s, error:%s", nodePath, err.Error())
-		respondError(w, req, msg, http.StatusInternalServerError)
+		return nil, NewServerError(err)
 	} else {
-		log.Info("mappingDelete %s OK", nodePath)
-		respondSuccessDefault(w, req)
+		return nil, nil
 	}
 }
 
@@ -320,7 +326,7 @@ func contentType(req *http.Request) int {
 	}
 }
 
-func rootHandler(w http.ResponseWriter, req *http.Request) {
+func rootHandler(req *http.Request) (interface{}, *HttpError) {
 	clientIP := requestIP(req)
 	vars := mux.Vars(req)
 	nodePath := vars["nodePath"]
@@ -339,16 +345,14 @@ func rootHandler(w http.ResponseWriter, req *http.Request) {
 		result = metadataRepo.Root(clientIP, nodePath)
 	}
 	if result == nil {
-		log.Warning("%s not found %s", nodePath, clientIP)
-		respondError(w, req, "Not found", http.StatusNotFound)
+		return nil, NewHttpError(http.StatusNotFound, "Not found")
 	} else {
-		log.Info("%s %s OK", nodePath, clientIP)
-		respondSuccess(w, req, result)
+		return result, nil
 	}
 
 }
 
-func selfHandler(w http.ResponseWriter, req *http.Request) {
+func selfHandler(req *http.Request) (interface{}, *HttpError) {
 	clientIP := requestIP(req)
 	vars := mux.Vars(req)
 	nodePath := vars["nodePath"]
@@ -367,11 +371,9 @@ func selfHandler(w http.ResponseWriter, req *http.Request) {
 		result = metadataRepo.Self(clientIP, nodePath)
 	}
 	if result == nil {
-		log.Warning("self not found clientIP:%s, requestPath:%s", clientIP, nodePath)
-		respondError(w, req, "Not found", http.StatusNotFound)
+		return nil, NewHttpError(http.StatusNotFound, "Not found")
 	} else {
-		log.Info("/self/%s %s OK", nodePath, clientIP)
-		respondSuccess(w, req, result)
+		return result, nil
 	}
 }
 
@@ -415,40 +417,27 @@ func respondSuccessDefault(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
-func respondSuccess(w http.ResponseWriter, req *http.Request, val interface{}) {
-	log.Info("reponse success %v", val)
+func respondSuccess(w http.ResponseWriter, req *http.Request, val interface{}) int {
 	switch contentType(req) {
 	case ContentText:
-		respondText(w, req, val)
+		return respondText(w, req, val)
 	case ContentJSON:
-		respondJSON(w, req, val)
+		return respondJSON(w, req, val)
 	case ContentYAML:
-		respondYAML(w, req, val)
+		return respondYAML(w, req, val)
 	}
+	return 0
 }
 
-func respondText(w http.ResponseWriter, req *http.Request, val interface{}) {
+func respondText(w http.ResponseWriter, req *http.Request, val interface{}) int {
 	if val == nil {
 		fmt.Fprint(w, "")
-		return
+		return 0
 	}
-
+	var buffer bytes.Buffer
 	switch v := val.(type) {
 	case string:
-		fmt.Fprint(w, v)
-	case uint, uint8, uint16, uint32, uint64, int, int8, int16, int32, int64:
-		fmt.Fprintf(w, "%d", v)
-	case float64:
-		// The default format has extra trailing zeros
-		str := strings.TrimRight(fmt.Sprintf("%f", v), "0")
-		str = strings.TrimRight(str, ".")
-		fmt.Fprint(w, str)
-	case bool:
-		if v {
-			fmt.Fprint(w, "true")
-		} else {
-			fmt.Fprint(w, "false")
-		}
+		buffer.WriteString(v)
 	case map[string]interface{}:
 		fm := flatmap.Flatten(v)
 		var keys []string
@@ -456,15 +445,21 @@ func respondText(w http.ResponseWriter, req *http.Request, val interface{}) {
 			keys = append(keys, k)
 		}
 		sort.Strings(keys)
+
 		for _, k := range keys {
-			fmt.Fprintln(w, k, "\t", fm[k])
+			buffer.WriteString(k)
+			buffer.WriteString("\t")
+			buffer.WriteString(fm[k])
+			buffer.WriteString("\n")
 		}
 	default:
-		http.Error(w, "Value is of a type I don't know how to handle", http.StatusInternalServerError)
+		log.Error("Value is of a type I don't know how to handle: %v", val)
 	}
+	w.Write(buffer.Bytes())
+	return buffer.Len()
 }
 
-func respondJSON(w http.ResponseWriter, req *http.Request, val interface{}) {
+func respondJSON(w http.ResponseWriter, req *http.Request, val interface{}) int {
 	prettyParam := req.FormValue("pretty")
 	pretty := prettyParam != "" && prettyParam != "false"
 	var bytes []byte
@@ -480,15 +475,17 @@ func respondJSON(w http.ResponseWriter, req *http.Request, val interface{}) {
 	} else {
 		respondError(w, req, "Error serializing to JSON: "+err.Error(), http.StatusInternalServerError)
 	}
+	return len(bytes)
 }
 
-func respondYAML(w http.ResponseWriter, req *http.Request, val interface{}) {
+func respondYAML(w http.ResponseWriter, req *http.Request, val interface{}) int {
 	bytes, err := yaml.Marshal(val)
 	if err == nil {
 		w.Write(bytes)
 	} else {
 		respondError(w, req, "Error serializing to YAML: "+err.Error(), http.StatusInternalServerError)
 	}
+	return len(bytes)
 }
 
 func requestIP(req *http.Request) string {
@@ -501,4 +498,42 @@ func requestIP(req *http.Request) string {
 
 	clientIp, _, _ := net.SplitHostPort(req.RemoteAddr)
 	return clientIp
+}
+
+func handlerWrapper(handler handlerFunc) func(w http.ResponseWriter, req *http.Request) {
+
+	return func(w http.ResponseWriter, req *http.Request) {
+		start := time.Now().Nanosecond()
+		result, err := handler(req)
+		end := time.Now().Nanosecond()
+		status := 200
+		var len int
+		if err != nil {
+			status = err.Status
+			respondError(w, req, err.Message, status)
+			errorLog(req, status, err.Message)
+		} else {
+			if log.IsDebugEnable() {
+				log.Debug("reponse success: %v", result)
+			}
+			if result == nil {
+				respondSuccessDefault(w, req)
+			} else {
+				len = respondSuccess(w, req, result)
+			}
+		}
+		requestLog(req, status, (end-start)/1000, len)
+	}
+}
+
+func requestLog(req *http.Request, status int, time int, len int) {
+	log.Info("REQ\t%s\t%s\t%s\t%v\t%v\t%v\t%v", req.Method, requestIP(req), req.RequestURI, req.ContentLength, status, time, len)
+}
+
+func errorLog(req *http.Request, status int, msg string) {
+	if status == 500 {
+		log.Error("ERR\t%s\t%s\t%s\t%v\t%v\t%s", req.Method, requestIP(req), req.RequestURI, req.ContentLength, status, msg)
+	} else {
+		log.Warning("ERR\t%s\t%s\t%s\t%v\t%v\t%s", req.Method, requestIP(req), req.RequestURI, req.ContentLength, status, msg)
+	}
 }

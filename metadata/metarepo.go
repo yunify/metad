@@ -69,8 +69,6 @@ func (r *MetadataRepo) StopSync() {
 }
 
 func (r *MetadataRepo) Root(clientIP string, nodePath string) interface{} {
-	log.Debug("Get clientIP:%s nodePath:%s", clientIP, nodePath)
-
 	nodePath = path.Join("/", nodePath)
 	if r.onlySelf {
 		if nodePath == "/" {
@@ -148,7 +146,9 @@ func watcherToResult(watcher store.Watcher, stopChan chan struct{}) interface{} 
 
 func (r *MetadataRepo) WatchSelf(clientIP string, nodePath string) interface{} {
 	nodePath = path.Join(clientIP, "/", nodePath)
-	log.Debug("WatchSelf nodePath: %s", nodePath)
+	if log.IsDebugEnable() {
+		log.Debug("WatchSelf nodePath: %s", nodePath)
+	}
 
 	mappingData := r.GetMapping(nodePath)
 	if mappingData == nil {
@@ -189,10 +189,11 @@ func (r *MetadataRepo) WatchSelf(clientIP string, nodePath string) interface{} {
 
 func (r *MetadataRepo) Self(clientIP string, nodePath string) interface{} {
 	nodePath = path.Join("/", nodePath)
-	log.Debug("Self nodePath:%s, clientIP:%s", nodePath, clientIP)
 	mappingData := r.GetMapping(path.Join("/", clientIP))
 	if mappingData == nil {
-		log.Warning("Can not find mapping for %s", clientIP)
+		if log.IsDebugEnable() {
+			log.Debug("Can not find mapping for %s", clientIP)
+		}
 		return nil
 	}
 	mapping, mok := mappingData.(map[string]interface{})
@@ -205,9 +206,7 @@ func (r *MetadataRepo) Self(clientIP string, nodePath string) interface{} {
 
 func (r *MetadataRepo) getMappingData(nodePath, link string) interface{} {
 	nodePath = path.Join(link, nodePath)
-	data := r.data.Get(nodePath)
-	log.Debug("getMappingData %s %v", nodePath, data != nil)
-	return data
+	return r.data.Get(nodePath)
 }
 
 func (r *MetadataRepo) getMappingDatas(nodePath string, mapping map[string]interface{}) interface{} {
@@ -248,7 +247,9 @@ func (r *MetadataRepo) getMappingDatas(nodePath string, mapping map[string]inter
 				return r.getMappingData(path.Join(paths[1:]...), fmt.Sprintf("%v", elemValue))
 			}
 		} else {
-			log.Debug("Can not find mapping for : %v, mapping:%v", nodePath, mapping)
+			if log.IsDebugEnable() {
+				log.Debug("Can not find mapping for : %v, mapping:%v", nodePath, mapping)
+			}
 			return nil
 		}
 	}

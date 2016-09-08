@@ -1,7 +1,6 @@
 package flatmap
 
 import (
-	"github.com/yunify/metad/log"
 	"path"
 	"strings"
 )
@@ -15,7 +14,6 @@ func Expand(m map[string]string, prefix string) map[string]interface{} {
 		prefix = prefix + "/"
 	}
 	result := expandMap(m, prefix)
-	log.Debug("Expand prefix:%s, map:%v, result:%v", prefix, m, result)
 	return result
 }
 

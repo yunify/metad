@@ -48,6 +48,10 @@ func SetLevel(level string) {
 	log.SetLevel(lvl)
 }
 
+func IsDebugEnable() bool {
+	return log.GetLevel() >= log.DebugLevel
+}
+
 // Debug logs a message with severity DEBUG.
 func Debug(format string, v ...interface{}) {
 	log.Debug(fmt.Sprintf(format, v...))
