@@ -509,7 +509,6 @@ func (m *Metad) requestIP(req *http.Request) string {
 func (m *Metad) handlerWrapper(handler handlerFunc) func(w http.ResponseWriter, req *http.Request) {
 
 	return func(w http.ResponseWriter, req *http.Request) {
-		println(req.RequestURI)
 		start := time.Now().Nanosecond()
 		result, err := handler(req)
 		end := time.Now().Nanosecond()
