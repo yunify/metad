@@ -132,6 +132,10 @@ func (m *Metad) Serve() {
 	log.Fatal("%v", http.ListenAndServe(m.config.Listen, m.router))
 }
 
+func (m *Metad) Stop() {
+	m.metadataRepo.StopSync()
+}
+
 func (m *Metad) watchSignals() {
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, syscall.SIGHUP)
@@ -158,6 +162,7 @@ func (m *Metad) watchSignals() {
 		sig := <-notifier
 		log.Info("Received stop signal")
 		signal.Stop(notifier)
+		m.Stop()
 		pid := syscall.Getpid()
 		// exit directly if it is the "init" process, since the kernel will not help to kill pid 1.
 		if pid == 1 {

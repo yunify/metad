@@ -29,6 +29,8 @@ func TestMetad(t *testing.T) {
 
 	metad.Init()
 
+	defer metad.Stop()
+
 	dataJson := `
 	{
 		"nodes": {
@@ -166,6 +168,7 @@ func TestMetad(t *testing.T) {
 	w = httptest.NewRecorder()
 	metad.router.ServeHTTP(w, req)
 	assert.Equal(t, 404, w.Code)
+
 }
 
 func parse(w *httptest.ResponseRecorder) interface{} {
