@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/yunify/metad/backends"
 	"github.com/yunify/metad/log"
-	"github.com/yunify/metad/metadata"
 	"gopkg.in/yaml.v2"
 	"io/ioutil"
 	"os"
@@ -26,11 +25,8 @@ func (n *Nodes) Set(node string) error {
 }
 
 var (
-	VERSION        string = "1.0"
-	config         Config // holds the global config
-	backendsConfig backends.Config
-	storeClient    backends.StoreClient
-	metadataRepo   *metadata.MetadataRepo
+	VERSION string = "1.0"
+	metad   *Metad
 
 	printVersion bool
 	logLevel     string
@@ -93,10 +89,10 @@ func init() {
 	flag.StringVar(&password, "password", "", "The password to authenticate with (only used with etcd backends)")
 }
 
-func initConfig() error {
+func initConfig() (*Config, error) {
 
 	// Set defaults.
-	config = Config{
+	config := &Config{
 		Backend:      "local",
 		Prefix:       "",
 		Group:        "default",
@@ -105,14 +101,14 @@ func initConfig() error {
 		ListenManage: "127.0.0.1:9611",
 	}
 	if configFile != "" {
-		err := loadConfigFile(configFile, &config)
+		err := loadConfigFile(configFile, config)
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
 
 	// Update config from commandline flags.
-	processFlags()
+	processFlags(config)
 
 	if config.LogLevel != "" {
 		println("set log level to:", config.LogLevel)
@@ -130,19 +126,7 @@ func initConfig() error {
 		config.BackendNodes = backends.GetDefaultBackends(config.Backend)
 	}
 
-	backendsConfig = backends.Config{
-		Backend:      config.Backend,
-		BasicAuth:    config.BasicAuth,
-		ClientCaKeys: config.ClientCaKeys,
-		ClientCert:   config.ClientCert,
-		ClientKey:    config.ClientKey,
-		BackendNodes: config.BackendNodes,
-		Password:     config.Password,
-		Username:     config.Username,
-		Prefix:       config.Prefix,
-		Group:        config.Group,
-	}
-	return nil
+	return config, nil
 }
 
 func loadConfigFile(configFile string, config *Config) error {
@@ -161,11 +145,13 @@ func loadConfigFile(configFile string, config *Config) error {
 
 // processFlags iterates through each flag set on the command line and
 // overrides corresponding configuration settings.
-func processFlags() {
-	flag.Visit(setConfigFromFlag)
+func processFlags(config *Config) {
+	flag.Visit(func(f *flag.Flag) {
+		setConfigFromFlag(config, f)
+	})
 }
 
-func setConfigFromFlag(f *flag.Flag) {
+func setConfigFromFlag(config *Config, f *flag.Flag) {
 	println("process arg name:", f.Name, ", value:", f.Value.String(), "default:", f.DefValue)
 	switch f.Name {
 	case "backend":

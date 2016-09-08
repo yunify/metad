@@ -1,27 +1,28 @@
 package util
 
 import (
+	"github.com/yunify/metad/util/flatmap"
 	"path"
 	"strings"
 )
 
-func TrimPathPrefix(metapath string, prefix string) string {
+func TrimPathPrefix(nodePath string, prefix string) string {
 	prefix = path.Join("/", prefix)
 
 	if prefix == "/" {
-		return metapath
+		return nodePath
 	}
 
-	if prefix == metapath {
+	if prefix == nodePath {
 		return "/"
 	}
 
 	if prefix[len(prefix)-1] != '/' {
 		prefix = prefix + "/"
 	}
-	metapath = path.Join("/", metapath)
+	nodePath = path.Join("/", nodePath)
 
-	return path.Clean(path.Join("/", strings.TrimPrefix(metapath, prefix)))
+	return path.Clean(path.Join("/", strings.TrimPrefix(nodePath, prefix)))
 }
 
 func TrimPathPrefixBatch(meta map[string]string, prefix string) map[string]string {
@@ -33,10 +34,16 @@ func TrimPathPrefixBatch(meta map[string]string, prefix string) map[string]strin
 	return newMeta
 }
 
-func AppendPathPrefix(metapath string, prefix string) string {
-	if strings.TrimSpace(metapath) == "" {
-		return metapath
+func AppendPathPrefix(nodePath string, prefix string) string {
+	if strings.TrimSpace(nodePath) == "" {
+		return nodePath
 	}
 	prefix = path.Join("/", prefix)
-	return path.Clean(path.Join(prefix, metapath))
+	return path.Clean(path.Join(prefix, nodePath))
+}
+
+func GetMapValue(m interface{}, nodePath string) string {
+	fm := flatmap.Flatten(m)
+	v := fm[nodePath]
+	return v
 }

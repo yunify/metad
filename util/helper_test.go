@@ -1,6 +1,9 @@
 package util
 
-import "testing"
+import (
+	"github.com/stretchr/testify/assert"
+	"testing"
+)
 
 func TestTrimPathPrefix(t *testing.T) {
 	cases := []struct {
@@ -84,4 +87,16 @@ func TestAppendPathPrefix(t *testing.T) {
 				tc.Output)
 		}
 	}
+}
+
+func TestGetMapValue(t *testing.T) {
+	m := map[string]interface{}{
+		"nodes": map[string]interface{}{
+			"1": map[string]interface{}{
+				"name": "node1",
+			},
+		},
+	}
+	assert.Equal(t, GetMapValue(m, "/nodes/1/name"), "node1")
+	assert.Equal(t, GetMapValue(m, "nodes/2"), "")
 }
