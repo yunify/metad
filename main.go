@@ -4,6 +4,8 @@ import (
 	"flag"
 	"fmt"
 	"github.com/yunify/metad/log"
+	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"time"
 )
@@ -25,6 +27,14 @@ func main() {
 		fmt.Printf("git version: %s\n", GIT_VERSION)
 		os.Exit(0)
 	}
+
+	if pprof {
+		fmt.Printf("Start pprof, 127.0.0.1:6060\n")
+		go func() {
+			log.Fatal("%v", http.ListenAndServe("127.0.0.1:6060", nil))
+		}()
+	}
+
 	var config *Config
 	var err error
 	if config, err = initConfig(); err != nil {

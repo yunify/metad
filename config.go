@@ -28,6 +28,7 @@ var (
 	metad *Metad
 
 	printVersion bool
+	pprof        bool
 	logLevel     string
 	enableXff    bool
 	onlySelf     bool
@@ -69,6 +70,7 @@ type Config struct {
 
 func init() {
 	flag.BoolVar(&printVersion, "version", false, "Show metad version")
+	flag.BoolVar(&pprof, "pprof", false, "Enable http pprof, port is 6060")
 	flag.StringVar(&configFile, "config", "", "The configuration file path")
 	flag.StringVar(&backend, "backend", "local", "The metad backend type")
 	flag.StringVar(&logLevel, "log_level", "info", "Log level for metad print out: debug|info|warning")
@@ -151,7 +153,7 @@ func processFlags(config *Config) {
 }
 
 func setConfigFromFlag(config *Config, f *flag.Flag) {
-	println("process arg name:", f.Name, ", value:", f.Value.String(), "default:", f.DefValue)
+	fmt.Printf("process arg name: %s, value: %s, default: %s", f.Name, f.Value.String(), f.DefValue)
 	switch f.Name {
 	case "backend":
 		config.Backend = backend
