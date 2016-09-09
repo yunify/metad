@@ -258,6 +258,7 @@ func (n *node) GetValue() interface{} {
 }
 
 func (n *node) internalNotify(action string, eventNode *node) {
+	n.store.watcherLock.RLock()
 	if n.watchers != nil && n.watchers.Len() > 0 {
 		event := newEvent(action, eventNode.RelativePath(n), eventNode.Value)
 		for e := n.watchers.Front(); e != nil; e = e.Next() {
@@ -265,6 +266,8 @@ func (n *node) internalNotify(action string, eventNode *node) {
 			w.EventChan() <- event
 		}
 	}
+	n.store.watcherLock.RUnlock()
+
 	// pop up event.
 	if n.parent != nil {
 		n.parent.internalNotify(action, eventNode)
@@ -276,6 +279,9 @@ func (n *node) Notify(action string) {
 }
 
 func (n *node) Watch() Watcher {
+	n.store.watcherLock.Lock()
+	defer n.store.watcherLock.Unlock()
+
 	if n.watchers == nil {
 		n.watchers = list.New()
 	}

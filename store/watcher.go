@@ -1,6 +1,9 @@
 package store
 
-import "path"
+import (
+	"path"
+	"sync"
+)
 
 const (
 	Update = "UPDATE"
@@ -58,10 +61,13 @@ func (w *watcher) Remove() {
 type aggregateWatcher struct {
 	watchers  map[string]Watcher
 	eventChan chan *Event
+	closeWait *sync.WaitGroup
 }
 
 func NewAggregateWatcher(watchers map[string]Watcher) Watcher {
 	eventChan := make(chan *Event, len(watchers))
+	waitGroup := &sync.WaitGroup{}
+	waitGroup.Add(len(watchers))
 	for pathPrefix, watcher := range watchers {
 		go func() {
 			for {
@@ -70,13 +76,14 @@ func NewAggregateWatcher(watchers map[string]Watcher) Watcher {
 					if ok {
 						eventChan <- newEvent(event.Action, path.Join(pathPrefix, event.Path), event.Value)
 					} else {
+						waitGroup.Done()
 						return
 					}
 				}
 			}
 		}()
 	}
-	return &aggregateWatcher{watchers: watchers, eventChan: eventChan}
+	return &aggregateWatcher{watchers: watchers, eventChan: eventChan, closeWait: waitGroup}
 }
 
 func (w *aggregateWatcher) EventChan() chan *Event {
@@ -87,5 +94,7 @@ func (w *aggregateWatcher) Remove() {
 	for _, watcher := range w.watchers {
 		watcher.Remove()
 	}
+	//wait all sub watcher's go routine exit.
+	w.closeWait.Wait()
 	close(w.eventChan)
 }

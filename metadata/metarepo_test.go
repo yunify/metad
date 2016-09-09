@@ -418,28 +418,32 @@ func TestWatchSelf(t *testing.T) {
 	ch := make(chan interface{})
 	defer close(ch)
 
-	go func() {
-		ch <- metarepo.WatchSelf("192.168.1.1", "/")
-	}()
-	time.Sleep(sleepTime)
-	//test data change
+	for i := 0; i <= 100; i++ {
+		go func() {
+			ch <- metarepo.WatchSelf("192.168.1.1", "/")
+		}()
+		time.Sleep(sleepTime)
+		//test data change
 
-	err = metarepo.PutData("/nodes/1", map[string]interface{}{
-		"name": "n1",
-		"ip":   "192.168.2.1",
-	}, false)
-	assert.NoError(t, err)
+		name := fmt.Sprintf("n1_%v", i)
+		ip := fmt.Sprintf("192.168.1.%v", i)
+		err = metarepo.PutData("/nodes/1", map[string]interface{}{
+			"name": name,
+			"ip":   ip,
+		}, false)
+		assert.NoError(t, err)
 
-	//println(metarepo.data.Json())
+		//println(metarepo.data.Json())
 
-	result := <-ch
+		result := <-ch
 
-	m, mok := result.(map[string]interface{})
-	assert.True(t, mok)
-	println(fmt.Sprintf("%v", m))
-	fmap := flatmap.Flatten(m)
-	assert.Equal(t, fmap["/node/name"], "UPDATE|n1")
-	assert.Equal(t, fmap["/node/ip"], "UPDATE|192.168.2.1")
+		m, mok := result.(map[string]interface{})
+		assert.True(t, mok)
+		//println(fmt.Sprintf("%v", m))
+		fmap := flatmap.Flatten(m)
+		assert.Equal(t, fmt.Sprintf("UPDATE|%s", name), fmap["/node/name"])
+		assert.Equal(t, fmt.Sprintf("UPDATE|%s", ip), fmap["/node/ip"])
+	}
 
 	// test watch self subdir
 	go func() {
@@ -451,12 +455,14 @@ func TestWatchSelf(t *testing.T) {
 	err = metarepo.DeleteData("/nodes/1/name")
 	assert.NoError(t, err)
 
-	result = <-ch
+	result := <-ch
 
-	m, mok = result.(map[string]interface{})
+	m, mok := result.(map[string]interface{})
 	assert.True(t, mok)
 	//println(fmt.Sprintf("%v", m))
-	assert.Equal(t, m["name"], "DELETE|n1")
+	assert.Equal(t, "DELETE|n1_100", m["name"])
+
+	log.Debug("TimerPool stat,total New:%v, Get:%v", metarepo.timerPool.TotalNew.Get(), metarepo.timerPool.TotalGet.Get())
 }
 
 func FillTestData(metarepo *MetadataRepo) map[string]string {

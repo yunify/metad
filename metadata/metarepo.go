@@ -6,6 +6,7 @@ import (
 	"github.com/yunify/metad/backends"
 	"github.com/yunify/metad/log"
 	"github.com/yunify/metad/store"
+	"github.com/yunify/metad/util"
 	"github.com/yunify/metad/util/flatmap"
 	"net"
 	"path"
@@ -21,6 +22,7 @@ type MetadataRepo struct {
 	data            store.Store
 	metaStopChan    chan bool
 	mappingStopChan chan bool
+	timerPool       *util.TimerPool
 }
 
 func New(onlySelf bool, storeClient backends.StoreClient) *MetadataRepo {
@@ -31,6 +33,7 @@ func New(onlySelf bool, storeClient backends.StoreClient) *MetadataRepo {
 		data:            store.New(),
 		metaStopChan:    make(chan bool),
 		mappingStopChan: make(chan bool),
+		timerPool:       util.NewTimerPool(100 * time.Millisecond),
 	}
 	return &metadataRepo
 }
@@ -111,14 +114,16 @@ func (r *MetadataRepo) Watch(clientIP string, nodePath string) interface{} {
 		}
 	} else {
 		w := r.data.Watch(nodePath)
-		return watcherToResult(w, nil)
+		return r.changeToResult(w, nil)
 	}
 }
 
-func watcherToResult(watcher store.Watcher, stopChan chan struct{}) interface{} {
+var TIMER_NIL *time.Timer = &time.Timer{C: nil}
+
+func (r *MetadataRepo) changeToResult(watcher store.Watcher, stopChan chan struct{}) interface{} {
 	defer watcher.Remove()
 	m := make(map[string]string)
-	var tick <-chan time.Time = nil
+	timer := TIMER_NIL
 
 	for {
 		var timeout bool = false
@@ -130,16 +135,21 @@ func watcherToResult(watcher store.Watcher, stopChan chan struct{}) interface{} 
 				return value
 			}
 			m[e.Path] = value
-			tick = time.Tick(50 * time.Millisecond)
-		case <-tick:
+			timer = r.timerPool.AcquireTimer()
+		case <-timer.C:
 			timeout = true
 		case <-stopChan:
-			//when stop, return empty map.
-			return map[string]interface{}{}
+			//when stop, return empty map, discard prev result.
+			m = make(map[string]string)
+			timeout = true
 		}
 		if timeout {
+			if timer.C != nil {
+				r.timerPool.ReleaseTimer(timer)
+			}
 			break
 		}
+		//TODO check map size, avoid too big result.
 	}
 	return flatmap.Expand(m, "/")
 }
@@ -174,7 +184,7 @@ func (r *MetadataRepo) WatchSelf(clientIP string, nodePath string) interface{} {
 		dataNodePath := fmt.Sprintf("%s", mappingData)
 		//log.Debug("watcher: %v", dataNodePath)
 		w := r.data.Watch(dataNodePath)
-		return watcherToResult(w, stopChan)
+		return r.changeToResult(w, stopChan)
 	} else {
 		flatMapping := flatmap.Flatten(mapping)
 		watchers := make(map[string]store.Watcher)
@@ -183,7 +193,7 @@ func (r *MetadataRepo) WatchSelf(clientIP string, nodePath string) interface{} {
 		}
 		//log.Debug("aggWatcher: %v", watchers)
 		aggWatcher := store.NewAggregateWatcher(watchers)
-		return watcherToResult(aggWatcher, stopChan)
+		return r.changeToResult(aggWatcher, stopChan)
 	}
 }
 
