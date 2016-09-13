@@ -5,3 +5,6 @@ source ./env
 echo "Building metad ..."
 mkdir -p bin
 go build -o bin/metad .
+
+cat version.go.bak > version.go
+rm version.go.bak
