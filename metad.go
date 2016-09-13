@@ -44,7 +44,7 @@ func (e HttpError) Error() string {
 	return fmt.Sprintf("%s", e.Message)
 }
 
-type handlerFunc func(req *http.Request) (interface{}, *HttpError)
+type handlerFunc func(req *http.Request, closeChan <-chan bool) (interface{}, *HttpError)
 
 type Metad struct {
 	config       *Config
@@ -182,7 +182,7 @@ func (m *Metad) resync() error {
 	return nil
 }
 
-func (m *Metad) httpResync(req *http.Request) (interface{}, *HttpError) {
+func (m *Metad) httpResync(req *http.Request, closeChan <-chan bool) (interface{}, *HttpError) {
 	respChan := make(chan error)
 	m.resyncChan <- respChan
 	err := <-respChan
@@ -193,7 +193,7 @@ func (m *Metad) httpResync(req *http.Request) (interface{}, *HttpError) {
 	}
 }
 
-func (m *Metad) dataGet(req *http.Request) (interface{}, *HttpError) {
+func (m *Metad) dataGet(req *http.Request, closeChan <-chan bool) (interface{}, *HttpError) {
 	vars := mux.Vars(req)
 	nodePath := vars["nodePath"]
 	if nodePath == "" {
@@ -207,7 +207,7 @@ func (m *Metad) dataGet(req *http.Request) (interface{}, *HttpError) {
 	}
 }
 
-func (m *Metad) dataUpdate(req *http.Request) (interface{}, *HttpError) {
+func (m *Metad) dataUpdate(req *http.Request, closeChan <-chan bool) (interface{}, *HttpError) {
 	vars := mux.Vars(req)
 	nodePath := vars["nodePath"]
 	if nodePath == "" {
@@ -234,7 +234,7 @@ func (m *Metad) dataUpdate(req *http.Request) (interface{}, *HttpError) {
 	}
 }
 
-func (m *Metad) dataDelete(req *http.Request) (interface{}, *HttpError) {
+func (m *Metad) dataDelete(req *http.Request, closeChan <-chan bool) (interface{}, *HttpError) {
 	vars := mux.Vars(req)
 	nodePath := vars["nodePath"]
 	if nodePath == "" {
@@ -253,7 +253,7 @@ func (m *Metad) dataDelete(req *http.Request) (interface{}, *HttpError) {
 	}
 }
 
-func (m *Metad) mappingGet(req *http.Request) (interface{}, *HttpError) {
+func (m *Metad) mappingGet(req *http.Request, closeChan <-chan bool) (interface{}, *HttpError) {
 	vars := mux.Vars(req)
 	nodePath := vars["nodePath"]
 	if nodePath == "" {
@@ -267,7 +267,7 @@ func (m *Metad) mappingGet(req *http.Request) (interface{}, *HttpError) {
 	}
 }
 
-func (m *Metad) mappingUpdate(req *http.Request) (interface{}, *HttpError) {
+func (m *Metad) mappingUpdate(req *http.Request, closeChan <-chan bool) (interface{}, *HttpError) {
 	vars := mux.Vars(req)
 	nodePath := vars["nodePath"]
 	if nodePath == "" {
@@ -294,7 +294,7 @@ func (m *Metad) mappingUpdate(req *http.Request) (interface{}, *HttpError) {
 	}
 }
 
-func (m *Metad) mappingDelete(req *http.Request) (interface{}, *HttpError) {
+func (m *Metad) mappingDelete(req *http.Request, closeChan <-chan bool) (interface{}, *HttpError) {
 	vars := mux.Vars(req)
 	nodePath := vars["nodePath"]
 	if nodePath == "" {
@@ -332,7 +332,7 @@ func contentType(req *http.Request) int {
 	}
 }
 
-func (m *Metad) rootHandler(req *http.Request) (interface{}, *HttpError) {
+func (m *Metad) rootHandler(req *http.Request, closeChan <-chan bool) (interface{}, *HttpError) {
 	clientIP := m.requestIP(req)
 	vars := mux.Vars(req)
 	nodePath := vars["nodePath"]
@@ -343,7 +343,7 @@ func (m *Metad) rootHandler(req *http.Request) (interface{}, *HttpError) {
 	var result interface{}
 	if wait {
 		change := strings.ToLower(req.FormValue("change")) != "false"
-		result = m.metadataRepo.Watch(clientIP, nodePath)
+		result = m.metadataRepo.Watch(clientIP, nodePath, closeChan)
 		if !change {
 			result = m.metadataRepo.Root(clientIP, nodePath)
 		}
@@ -358,7 +358,7 @@ func (m *Metad) rootHandler(req *http.Request) (interface{}, *HttpError) {
 
 }
 
-func (m *Metad) selfHandler(req *http.Request) (interface{}, *HttpError) {
+func (m *Metad) selfHandler(req *http.Request, closeChan <-chan bool) (interface{}, *HttpError) {
 	clientIP := m.requestIP(req)
 	vars := mux.Vars(req)
 	nodePath := vars["nodePath"]
@@ -369,7 +369,7 @@ func (m *Metad) selfHandler(req *http.Request) (interface{}, *HttpError) {
 	var result interface{}
 	if wait {
 		change := strings.ToLower(req.FormValue("change")) != "false"
-		result = m.metadataRepo.WatchSelf(clientIP, nodePath)
+		result = m.metadataRepo.WatchSelf(clientIP, nodePath, closeChan)
 		if !change {
 			result = m.metadataRepo.Self(clientIP, nodePath)
 		}
@@ -509,9 +509,13 @@ func (m *Metad) requestIP(req *http.Request) string {
 func (m *Metad) handlerWrapper(handler handlerFunc) func(w http.ResponseWriter, req *http.Request) {
 
 	return func(w http.ResponseWriter, req *http.Request) {
-		start := time.Now().Nanosecond()
-		result, err := handler(req)
-		end := time.Now().Nanosecond()
+		var closeChan <-chan bool
+		if x, ok := w.(http.CloseNotifier); ok {
+			closeChan = x.CloseNotify()
+		}
+		start := time.Now()
+		result, err := handler(req, closeChan)
+		elapsed := time.Since(start)
 		status := 200
 		var len int
 		if err != nil {
@@ -528,12 +532,12 @@ func (m *Metad) handlerWrapper(handler handlerFunc) func(w http.ResponseWriter, 
 				len = respondSuccess(w, req, result)
 			}
 		}
-		m.requestLog(req, status, (end-start)/1000, len)
+		m.requestLog(req, status, elapsed, len)
 	}
 }
 
-func (m *Metad) requestLog(req *http.Request, status int, time int, len int) {
-	log.Info("REQ\t%s\t%s\t%s\t%v\t%v\t%v\t%v", req.Method, m.requestIP(req), req.RequestURI, req.ContentLength, status, time, len)
+func (m *Metad) requestLog(req *http.Request, status int, elapsed time.Duration, len int) {
+	log.Info("REQ\t%s\t%s\t%s\t%v\t%v\t%v\t%v", req.Method, m.requestIP(req), req.RequestURI, req.ContentLength, status, int64(elapsed.Seconds()*1000), len)
 }
 
 func (m *Metad) errorLog(req *http.Request, status int, msg string) {

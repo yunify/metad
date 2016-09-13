@@ -103,47 +103,51 @@ func (r *MetadataRepo) Root(clientIP string, nodePath string) interface{} {
 	}
 }
 
-func (r *MetadataRepo) Watch(clientIP string, nodePath string) interface{} {
+func (r *MetadataRepo) Watch(clientIP string, nodePath string, closeChan <-chan bool) interface{} {
 	nodePath = path.Join("/", nodePath)
 
 	if r.onlySelf {
 		if nodePath == "/" {
-			return r.WatchSelf(clientIP, "/")
+			return r.WatchSelf(clientIP, "/", closeChan)
 		} else {
 			return nil
 		}
 	} else {
 		w := r.data.Watch(nodePath)
-		return r.changeToResult(w, nil)
+		return r.changeToResult(w, closeChan)
 	}
 }
 
 var TIMER_NIL *time.Timer = &time.Timer{C: nil}
 
-func (r *MetadataRepo) changeToResult(watcher store.Watcher, stopChan chan struct{}) interface{} {
+func (r *MetadataRepo) changeToResult(watcher store.Watcher, stopChan <-chan bool) interface{} {
 	defer watcher.Remove()
 	m := make(map[string]string)
 	timer := TIMER_NIL
 
 	for {
-		var timeout bool = false
+		var finish bool = false
 		select {
-		case e := <-watcher.EventChan():
-			value := fmt.Sprintf("%s|%s", e.Action, e.Value)
-			// if event is one leaf node, just return value.
-			if e.Path == "/" {
-				return value
+		case e, ok := <-watcher.EventChan():
+			if ok {
+				value := fmt.Sprintf("%s|%s", e.Action, e.Value)
+				// if event is one leaf node, just return value.
+				if e.Path == "/" {
+					return value
+				}
+				m[e.Path] = value
+				timer = r.timerPool.AcquireTimer()
+			} else {
+				finish = true
 			}
-			m[e.Path] = value
-			timer = r.timerPool.AcquireTimer()
 		case <-timer.C:
-			timeout = true
+			finish = true
 		case <-stopChan:
 			//when stop, return empty map, discard prev result.
 			m = make(map[string]string)
-			timeout = true
+			finish = true
 		}
-		if timeout {
+		if finish {
 			if timer.C != nil {
 				r.timerPool.ReleaseTimer(timer)
 			}
@@ -154,12 +158,11 @@ func (r *MetadataRepo) changeToResult(watcher store.Watcher, stopChan chan struc
 	return flatmap.Expand(m, "/")
 }
 
-func (r *MetadataRepo) WatchSelf(clientIP string, nodePath string) interface{} {
+func (r *MetadataRepo) WatchSelf(clientIP string, nodePath string, closeChan <-chan bool) interface{} {
 	nodePath = path.Join(clientIP, "/", nodePath)
 	if log.IsDebugEnable() {
 		log.Debug("WatchSelf nodePath: %s", nodePath)
 	}
-
 	mappingData := r.GetMapping(nodePath)
 	if mappingData == nil {
 		return nil
@@ -167,15 +170,16 @@ func (r *MetadataRepo) WatchSelf(clientIP string, nodePath string) interface{} {
 	mappingWatcher := r.mapping.Watch(nodePath)
 	defer mappingWatcher.Remove()
 
-	stopChan := make(chan struct{})
+	stopChan := make(chan bool)
 	defer close(stopChan)
-
 	go func() {
 		select {
 		case _, ok := <-mappingWatcher.EventChan():
 			if ok {
-				stopChan <- struct{}{}
+				stopChan <- true
 			}
+		case <-closeChan:
+			stopChan <- true
 		}
 	}()
 

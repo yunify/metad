@@ -351,11 +351,14 @@ func TestWatch(t *testing.T) {
 	metarepo.DeleteMapping("/")
 	metarepo.DeleteData("/")
 
+	closeChan := make(chan bool)
+	defer close(closeChan)
+
 	ch := make(chan interface{})
 	defer close(ch)
 
 	go func() {
-		ch <- metarepo.Watch("192.168.1.1", "/")
+		ch <- metarepo.Watch("192.168.1.1", "/", closeChan)
 	}()
 
 	FillTestData(metarepo)
@@ -376,7 +379,7 @@ func TestWatch(t *testing.T) {
 	//test watch leaf node
 
 	go func() {
-		ch <- metarepo.Watch("192.168.1.1", "/nodes/1/name")
+		ch <- metarepo.Watch("192.168.1.1", "/nodes/1/name", closeChan)
 	}()
 	time.Sleep(sleepTime)
 
@@ -415,12 +418,15 @@ func TestWatchSelf(t *testing.T) {
 
 	time.Sleep(sleepTime)
 
+	closeChan := make(chan bool)
+	defer close(closeChan)
+
 	ch := make(chan interface{})
 	defer close(ch)
 
 	for i := 0; i <= 100; i++ {
 		go func() {
-			ch <- metarepo.WatchSelf("192.168.1.1", "/")
+			ch <- metarepo.WatchSelf("192.168.1.1", "/", closeChan)
 		}()
 		time.Sleep(sleepTime)
 		//test data change
@@ -447,7 +453,7 @@ func TestWatchSelf(t *testing.T) {
 
 	// test watch self subdir
 	go func() {
-		ch <- metarepo.WatchSelf("192.168.1.1", "/node")
+		ch <- metarepo.WatchSelf("192.168.1.1", "/node", closeChan)
 	}()
 
 	time.Sleep(sleepTime)
@@ -463,6 +469,62 @@ func TestWatchSelf(t *testing.T) {
 	assert.Equal(t, "DELETE|n1_100", m["name"])
 
 	log.Debug("TimerPool stat,total New:%v, Get:%v", metarepo.timerPool.TotalNew.Get(), metarepo.timerPool.TotalGet.Get())
+}
+
+func TestWatchCloseChan(t *testing.T) {
+	prefix := fmt.Sprintf("/prefix%v", rand.Intn(1000))
+	group := fmt.Sprintf("/group%v", rand.Intn(1000))
+	nodes := backends.GetDefaultBackends(backend)
+
+	config := backends.Config{
+		Backend:      backend,
+		BackendNodes: nodes,
+		Prefix:       prefix,
+		Group:        group,
+	}
+	storeClient, err := backends.New(config)
+	assert.NoError(t, err)
+
+	metarepo := New(false, storeClient)
+
+	metarepo.StartSync()
+
+	ip := "192.168.1.1"
+
+	err = metarepo.PutMapping(ip, map[string]interface{}{
+		"node": "/nodes/1",
+	}, true)
+	assert.NoError(t, err)
+
+	time.Sleep(sleepTime)
+
+	closeChan := make(chan bool)
+	defer close(closeChan)
+
+	closeChan2 := make(chan bool)
+	defer close(closeChan2)
+
+	ch := make(chan interface{})
+	defer close(ch)
+
+	ch2 := make(chan interface{})
+	defer close(ch2)
+
+	go func() {
+		ch <- metarepo.Watch("192.168.1.1", "/", closeChan)
+	}()
+	go func() {
+		ch2 <- metarepo.WatchSelf(ip, "/", closeChan2)
+	}()
+
+	time.Sleep(sleepTime)
+
+	closeChan <- true
+	result := <-ch
+	assert.NotNil(t, result)
+	closeChan2 <- true
+	result2 := <-ch2
+	assert.NotNil(t, result2)
 }
 
 func FillTestData(metarepo *MetadataRepo) map[string]string {
