@@ -44,10 +44,11 @@ sudo ./install
 ```
 
 
-#### Building from Source by docker
+#### Building from Source by docker for alpine
 
 ```
-docker run -ti --rm -v $(pwd):/app qingcloud/metad_builder ./build
+docker build -t qingcloud/metad_builder_alpine -f Dockerfile.build.alpine
+docker run -ti --rm -v $(pwd):/app qingcloud/metad_builder_alpine ./build
 ```
 
 The above docker commands will produce binary in the local bin directory.

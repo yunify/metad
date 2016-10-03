@@ -6,4 +6,4 @@ COPY bin/metad /usr/bin
 EXPOSE 9112
 EXPOSE 80
 
-CMD ["metad"]
+ENTRYPOINT ["/usr/bin/metad"]
