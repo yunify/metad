@@ -1,6 +1,7 @@
 package store
 
 import (
+	"fmt"
 	"path"
 	"sync"
 )
@@ -14,6 +15,10 @@ type Event struct {
 	Action string `json:"action"`
 	Path   string `json:"path"`
 	Value  string `json:"value"`
+}
+
+func (e *Event) String() string {
+	return fmt.Sprintf("%s:%s|%s", e.Path, e.Action, e.Value)
 }
 
 func newEvent(action string, path string, value string) *Event {
@@ -69,7 +74,7 @@ func NewAggregateWatcher(watchers map[string]Watcher) Watcher {
 	waitGroup := &sync.WaitGroup{}
 	waitGroup.Add(len(watchers))
 	for pathPrefix, watcher := range watchers {
-		go func() {
+		go func(pathPrefix string, watcher Watcher) {
 			for {
 				select {
 				case event, ok := <-watcher.EventChan():
@@ -81,7 +86,7 @@ func NewAggregateWatcher(watchers map[string]Watcher) Watcher {
 					}
 				}
 			}
-		}()
+		}(pathPrefix, watcher)
 	}
 	return &aggregateWatcher{watchers: watchers, eventChan: eventChan, closeWait: waitGroup}
 }

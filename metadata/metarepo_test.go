@@ -386,6 +386,7 @@ func TestWatch(t *testing.T) {
 	metarepo.PutData("/nodes/1/name", "n1", false)
 	result = <-ch
 	assert.Equal(t, "UPDATE|n1", result)
+	metarepo.StopSync()
 }
 
 func TestWatchSelf(t *testing.T) {
@@ -469,6 +470,7 @@ func TestWatchSelf(t *testing.T) {
 	assert.Equal(t, "DELETE|n1_100", m["name"])
 
 	log.Debug("TimerPool stat,total New:%v, Get:%v", metarepo.timerPool.TotalNew.Get(), metarepo.timerPool.TotalGet.Get())
+	metarepo.StopSync()
 }
 
 func TestWatchCloseChan(t *testing.T) {
@@ -525,6 +527,62 @@ func TestWatchCloseChan(t *testing.T) {
 	closeChan2 <- true
 	result2 := <-ch2
 	assert.NotNil(t, result2)
+	metarepo.StopSync()
+}
+
+// TestSelfWatchNodeNotExist
+// create a mapping with a node not exist, then update the node
+func TestSelfWatchNodeNotExist(t *testing.T) {
+	prefix := fmt.Sprintf("/prefix%v", rand.Intn(1000))
+	group := fmt.Sprintf("/group%v", rand.Intn(1000))
+	nodes := backends.GetDefaultBackends(backend)
+
+	config := backends.Config{
+		Backend:      backend,
+		BackendNodes: nodes,
+		Prefix:       prefix,
+		Group:        group,
+	}
+	storeClient, err := backends.New(config)
+	assert.NoError(t, err)
+
+	metarepo := New(false, storeClient)
+
+	metarepo.StartSync()
+
+	//fmt.Printf("data:%p mapping:%p \n", metarepo.data.)
+
+	ip := "192.168.1.1"
+
+	err = metarepo.PutMapping(ip, map[string]interface{}{
+		"host": "/hosts/i-local",
+		"cmd":  "/cmd/i-local",
+	}, true)
+	assert.NoError(t, err)
+
+	//err = metarepo.PutData("/hosts/i-local", ip , true)
+	//assert.NoError(t, err)
+
+	time.Sleep(sleepTime)
+
+	closeChan := make(chan bool)
+	defer close(closeChan)
+
+	ch := make(chan interface{})
+	defer close(ch)
+	go func() {
+		ch <- metarepo.WatchSelf(ip, "/", closeChan)
+	}()
+
+	time.Sleep(sleepTime)
+
+	err = metarepo.PutData("/cmd/i-local", "start", true)
+	assert.NoError(t, err)
+	result := <-ch
+	println(fmt.Sprintf("%s", result))
+	assert.NotNil(t, result)
+	//closeChan <- true
+	metarepo.StopSync()
 }
 
 func FillTestData(metarepo *MetadataRepo) map[string]string {
