@@ -45,7 +45,7 @@ func (e HttpError) Error() string {
 	return fmt.Sprintf("%s", e.Message)
 }
 
-type handleFunc func(req *http.Request, closeChan <-chan bool) (uint64, interface{}, *HttpError)
+type handleFunc func(req *http.Request, closeChan <-chan bool) (int64, interface{}, *HttpError)
 type manageFunc func(req *http.Request) (interface{}, *HttpError)
 
 type Metad struct {
@@ -334,7 +334,7 @@ func contentType(req *http.Request) int {
 	}
 }
 
-func (m *Metad) rootHandler(req *http.Request, closeChan <-chan bool) (currentVersion uint64, result interface{}, httpErr *HttpError) {
+func (m *Metad) rootHandler(req *http.Request, closeChan <-chan bool) (currentVersion int64, result interface{}, httpErr *HttpError) {
 	clientIP := m.requestIP(req)
 	vars := mux.Vars(req)
 	nodePath := vars["nodePath"]
@@ -352,7 +352,7 @@ func (m *Metad) rootHandler(req *http.Request, closeChan <-chan bool) (currentVe
 				prevVersion = -1
 			}
 		}
-		if prevVersion > 0 && uint64(prevVersion) < m.metadataRepo.DataVersion() {
+		if prevVersion > 0 && int64(prevVersion) < m.metadataRepo.DataVersion() {
 			currentVersion, result = m.metadataRepo.Root(clientIP, nodePath)
 		} else {
 			m.metadataRepo.Watch(clientIP, nodePath, closeChan)
@@ -368,7 +368,7 @@ func (m *Metad) rootHandler(req *http.Request, closeChan <-chan bool) (currentVe
 	return
 }
 
-func (m *Metad) selfHandler(req *http.Request, closeChan <-chan bool) (currentVersion uint64, result interface{}, httpErr *HttpError) {
+func (m *Metad) selfHandler(req *http.Request, closeChan <-chan bool) (currentVersion int64, result interface{}, httpErr *HttpError) {
 	clientIP := m.requestIP(req)
 	vars := mux.Vars(req)
 	nodePath := vars["nodePath"]
@@ -388,7 +388,7 @@ func (m *Metad) selfHandler(req *http.Request, closeChan <-chan bool) (currentVe
 				prevVersion = -1
 			}
 		}
-		if prevVersion > 0 && uint64(prevVersion) < currentVersion {
+		if prevVersion > 0 && int64(prevVersion) < currentVersion {
 			result = m.metadataRepo.Self(clientIP, nodePath)
 		} else {
 			m.metadataRepo.WatchSelf(clientIP, nodePath, closeChan)

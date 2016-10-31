@@ -71,7 +71,7 @@ func (r *MetadataRepo) StopSync() {
 	r.mappingStopChan <- true
 }
 
-func (r *MetadataRepo) Root(clientIP string, nodePath string) (currentVersion uint64, val interface{}) {
+func (r *MetadataRepo) Root(clientIP string, nodePath string) (currentVersion int64, val interface{}) {
 	nodePath = path.Join("/", nodePath)
 	if r.onlySelf {
 		currentVersion = r.data.Version()
@@ -387,7 +387,7 @@ func (r *MetadataRepo) DeleteMapping(nodePath string, subs ...string) error {
 	}
 }
 
-func (r *MetadataRepo) DataVersion() uint64 {
+func (r *MetadataRepo) DataVersion() int64 {
 	return r.data.Version()
 }
 
