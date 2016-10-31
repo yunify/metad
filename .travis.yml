@@ -8,9 +8,9 @@ services:
 go:
     - 1.7
 before_install:
-    - wget https://github.com/coreos/etcd/releases/download/v3.0.6/etcd-v3.0.6-linux-amd64.tar.gz
-    - tar xzf etcd-v3.0.6-linux-amd64.tar.gz
-    - sudo mv etcd-v3.0.6-linux-amd64/etcd /bin/
+    - wget https://github.com/coreos/etcd/releases/download/v3.0.13/etcd-v3.0.13-linux-amd64.tar.gz
+    - tar xzf etcd-v3.0.13-linux-amd64.tar.gz
+    - sudo mv etcd-v3.0.13-linux-amd64/etcd /bin/
     - etcd &
 install:
     - "./build"
