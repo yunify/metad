@@ -12,9 +12,11 @@ import (
 
 type Store interface {
 	// Get
-	// return a string (nodePath is a leaf node) or
+	// return
+	// currentVersion uint64 and
+	// a string (nodePath is a leaf node) or
 	// a map[string]interface{} (nodePath is dir)
-	Get(nodePath string) interface{}
+	Get(nodePath string) (uint64, interface{})
 	// Put value can be a map[string]interface{} or string
 	Put(nodePath string, value interface{})
 	Delete(nodePath string)
@@ -23,10 +25,13 @@ type Store interface {
 	Watch(nodePath string) Watcher
 	// Json output store as json
 	Json() string
+	// Version return store's current version
+	Version() uint64
 }
 
 type store struct {
 	Root        *node
+	version     uint64
 	worldLock   sync.RWMutex // stop the world lock
 	watcherLock sync.RWMutex
 }
@@ -43,26 +48,25 @@ func newStore() *store {
 }
 
 // Get returns a path value.
-func (s *store) Get(nodePath string) interface{} {
+func (s *store) Get(nodePath string) (currentVersion uint64, val interface{}) {
 
 	s.worldLock.RLock()
 	defer s.worldLock.RUnlock()
+	currentVersion = s.version
+	val = nil
 
 	nodePath = path.Clean(path.Join("/", nodePath))
 
 	n := s.internalGet(nodePath)
 	if n != nil {
-		val := n.GetValue()
+		val = n.GetValue()
 		m, mok := val.(map[string]interface{})
 		// treat empty dir as not found result.
 		if mok && len(m) == 0 && !n.IsRoot() {
-			return nil
-		} else {
-			return val
+			val = nil
 		}
 	}
-
-	return nil
+	return
 }
 
 // Put creates or update the node at nodePath, value should a map[string]interface{} or a string
@@ -100,6 +104,7 @@ func (s *store) Delete(nodePath string) {
 	if n == nil { // if the node does not exist, treat as success
 		return
 	}
+	s.version = s.version + 1
 	n.Remove()
 }
 
@@ -128,6 +133,10 @@ func (s *store) Json() string {
 	return s.Root.Json()
 }
 
+func (s *store) Version() uint64 {
+	return s.version
+}
+
 // walk walks all the nodePath and apply the walkFunc on each directory
 func (s *store) walk(nodePath string, walkFunc func(prev *node, component string) *node) *node {
 	components := strings.Split(nodePath, "/")
@@ -149,6 +158,8 @@ func (s *store) walk(nodePath string, walkFunc func(prev *node, component string
 }
 
 func (s *store) internalPut(nodePath string, value string) *node {
+
+	s.version = s.version + 1
 
 	// nodePath is "/", just ignore put value.
 	if nodePath == "/" {

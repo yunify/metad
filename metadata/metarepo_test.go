@@ -46,7 +46,7 @@ func TestMetarepoData(t *testing.T) {
 	time.Sleep(sleepTime)
 	ValidTestData(t, testData, metarepo.data)
 
-	val := metarepo.Root("192.168.0.1", "/nodes/0")
+	_, val := metarepo.Root("192.168.0.1", "/nodes/0")
 	assert.NotNil(t, val)
 
 	mapVal, mok := val.(map[string]interface{})
@@ -311,7 +311,7 @@ func TestMetarepoRoot(t *testing.T) {
 	assert.NoError(t, err)
 
 	time.Sleep(sleepTime)
-	val := metarepo.Root(ip, "/")
+	_, val := metarepo.Root(ip, "/")
 	mapVal, mok := val.(map[string]interface{})
 	assert.True(t, mok)
 	//println(fmt.Sprintf("%v", mapVal))
@@ -322,7 +322,7 @@ func TestMetarepoRoot(t *testing.T) {
 
 	metarepo.SetOnlySelf(true)
 
-	val = metarepo.Root(ip, "/")
+	_, val = metarepo.Root(ip, "/")
 	mapVal = val.(map[string]interface{})
 	selfVal = mapVal["self"]
 	assert.NotNil(t, selfVal)
@@ -606,7 +606,7 @@ func FillTestData(metarepo *MetadataRepo) map[string]string {
 
 func ValidTestData(t *testing.T, testData map[string]string, metastore store.Store) {
 	for k, v := range testData {
-		storeVal := metastore.Get(k)
+		_, storeVal := metastore.Get(k)
 		assert.Equal(t, v, storeVal)
 	}
 }

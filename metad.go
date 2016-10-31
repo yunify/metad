@@ -16,6 +16,7 @@ import (
 	"os"
 	"os/signal"
 	"sort"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -44,7 +45,8 @@ func (e HttpError) Error() string {
 	return fmt.Sprintf("%s", e.Message)
 }
 
-type handlerFunc func(req *http.Request, closeChan <-chan bool) (interface{}, *HttpError)
+type handleFunc func(req *http.Request, closeChan <-chan bool) (uint64, interface{}, *HttpError)
+type manageFunc func(req *http.Request) (interface{}, *HttpError)
 
 type Metad struct {
 	config       *Config
@@ -87,13 +89,13 @@ func (m *Metad) Init() {
 func (m *Metad) initRouter() {
 	m.router.HandleFunc("/favicon.ico", http.NotFound)
 
-	m.router.HandleFunc("/self", m.handlerWrapper(m.selfHandler)).
+	m.router.HandleFunc("/self", m.handleWrapper(m.selfHandler)).
 		Methods("GET", "HEAD")
 
-	m.router.HandleFunc("/self/{nodePath:.*}", m.handlerWrapper(m.selfHandler)).
+	m.router.HandleFunc("/self/{nodePath:.*}", m.handleWrapper(m.selfHandler)).
 		Methods("GET", "HEAD")
 
-	m.router.HandleFunc("/{nodePath:.*}", m.handlerWrapper(m.rootHandler)).
+	m.router.HandleFunc("/{nodePath:.*}", m.handleWrapper(m.rootHandler)).
 		Methods("GET", "HEAD")
 }
 
@@ -101,27 +103,27 @@ func (m *Metad) initManageRouter() {
 	m.manageRouter.HandleFunc("/favicon.ico", http.NotFound)
 
 	v1 := m.manageRouter.PathPrefix("/v1").Subrouter()
-	v1.HandleFunc("/resync", m.handlerWrapper(m.httpResync)).Methods("POST")
+	v1.HandleFunc("/resync", m.manageWrapper(m.httpResync)).Methods("POST")
 
-	v1.HandleFunc("/mapping", m.handlerWrapper(m.mappingGet)).Methods("GET")
-	v1.HandleFunc("/mapping", m.handlerWrapper(m.mappingUpdate)).Methods("POST", "PUT")
-	v1.HandleFunc("/mapping", m.handlerWrapper(m.mappingDelete)).Methods("DELETE")
+	v1.HandleFunc("/mapping", m.manageWrapper(m.mappingGet)).Methods("GET")
+	v1.HandleFunc("/mapping", m.manageWrapper(m.mappingUpdate)).Methods("POST", "PUT")
+	v1.HandleFunc("/mapping", m.manageWrapper(m.mappingDelete)).Methods("DELETE")
 
 	mapping := v1.PathPrefix("/mapping").Subrouter()
 	//mapping.HandleFunc("", mappingGET).Methods("GET")
-	mapping.HandleFunc("/{nodePath:.*}", m.handlerWrapper(m.mappingGet)).Methods("GET")
-	mapping.HandleFunc("/{nodePath:.*}", m.handlerWrapper(m.mappingUpdate)).Methods("POST", "PUT")
-	mapping.HandleFunc("/{nodePath:.*}", m.handlerWrapper(m.mappingDelete)).Methods("DELETE")
+	mapping.HandleFunc("/{nodePath:.*}", m.manageWrapper(m.mappingGet)).Methods("GET")
+	mapping.HandleFunc("/{nodePath:.*}", m.manageWrapper(m.mappingUpdate)).Methods("POST", "PUT")
+	mapping.HandleFunc("/{nodePath:.*}", m.manageWrapper(m.mappingDelete)).Methods("DELETE")
 
-	v1.HandleFunc("/data", m.handlerWrapper(m.dataGet)).Methods("GET")
-	v1.HandleFunc("/data", m.handlerWrapper(m.dataUpdate)).Methods("POST", "PUT")
-	v1.HandleFunc("/data", m.handlerWrapper(m.dataDelete)).Methods("DELETE")
+	v1.HandleFunc("/data", m.manageWrapper(m.dataGet)).Methods("GET")
+	v1.HandleFunc("/data", m.manageWrapper(m.dataUpdate)).Methods("POST", "PUT")
+	v1.HandleFunc("/data", m.manageWrapper(m.dataDelete)).Methods("DELETE")
 
 	data := v1.PathPrefix("/data").Subrouter()
 	//mapping.HandleFunc("", mappingGET).Methods("GET")
-	data.HandleFunc("/{nodePath:.*}", m.handlerWrapper(m.dataGet)).Methods("GET")
-	data.HandleFunc("/{nodePath:.*}", m.handlerWrapper(m.dataUpdate)).Methods("POST", "PUT")
-	data.HandleFunc("/{nodePath:.*}", m.handlerWrapper(m.dataDelete)).Methods("DELETE")
+	data.HandleFunc("/{nodePath:.*}", m.manageWrapper(m.dataGet)).Methods("GET")
+	data.HandleFunc("/{nodePath:.*}", m.manageWrapper(m.dataUpdate)).Methods("POST", "PUT")
+	data.HandleFunc("/{nodePath:.*}", m.manageWrapper(m.dataDelete)).Methods("DELETE")
 }
 
 func (m *Metad) Serve() {
@@ -182,7 +184,7 @@ func (m *Metad) resync() error {
 	return nil
 }
 
-func (m *Metad) httpResync(req *http.Request, closeChan <-chan bool) (interface{}, *HttpError) {
+func (m *Metad) httpResync(req *http.Request) (interface{}, *HttpError) {
 	respChan := make(chan error)
 	m.resyncChan <- respChan
 	err := <-respChan
@@ -193,7 +195,7 @@ func (m *Metad) httpResync(req *http.Request, closeChan <-chan bool) (interface{
 	}
 }
 
-func (m *Metad) dataGet(req *http.Request, closeChan <-chan bool) (interface{}, *HttpError) {
+func (m *Metad) dataGet(req *http.Request) (interface{}, *HttpError) {
 	vars := mux.Vars(req)
 	nodePath := vars["nodePath"]
 	if nodePath == "" {
@@ -207,7 +209,7 @@ func (m *Metad) dataGet(req *http.Request, closeChan <-chan bool) (interface{}, 
 	}
 }
 
-func (m *Metad) dataUpdate(req *http.Request, closeChan <-chan bool) (interface{}, *HttpError) {
+func (m *Metad) dataUpdate(req *http.Request) (interface{}, *HttpError) {
 	vars := mux.Vars(req)
 	nodePath := vars["nodePath"]
 	if nodePath == "" {
@@ -234,7 +236,7 @@ func (m *Metad) dataUpdate(req *http.Request, closeChan <-chan bool) (interface{
 	}
 }
 
-func (m *Metad) dataDelete(req *http.Request, closeChan <-chan bool) (interface{}, *HttpError) {
+func (m *Metad) dataDelete(req *http.Request) (interface{}, *HttpError) {
 	vars := mux.Vars(req)
 	nodePath := vars["nodePath"]
 	if nodePath == "" {
@@ -253,7 +255,7 @@ func (m *Metad) dataDelete(req *http.Request, closeChan <-chan bool) (interface{
 	}
 }
 
-func (m *Metad) mappingGet(req *http.Request, closeChan <-chan bool) (interface{}, *HttpError) {
+func (m *Metad) mappingGet(req *http.Request) (interface{}, *HttpError) {
 	vars := mux.Vars(req)
 	nodePath := vars["nodePath"]
 	if nodePath == "" {
@@ -267,7 +269,7 @@ func (m *Metad) mappingGet(req *http.Request, closeChan <-chan bool) (interface{
 	}
 }
 
-func (m *Metad) mappingUpdate(req *http.Request, closeChan <-chan bool) (interface{}, *HttpError) {
+func (m *Metad) mappingUpdate(req *http.Request) (interface{}, *HttpError) {
 	vars := mux.Vars(req)
 	nodePath := vars["nodePath"]
 	if nodePath == "" {
@@ -294,7 +296,7 @@ func (m *Metad) mappingUpdate(req *http.Request, closeChan <-chan bool) (interfa
 	}
 }
 
-func (m *Metad) mappingDelete(req *http.Request, closeChan <-chan bool) (interface{}, *HttpError) {
+func (m *Metad) mappingDelete(req *http.Request) (interface{}, *HttpError) {
 	vars := mux.Vars(req)
 	nodePath := vars["nodePath"]
 	if nodePath == "" {
@@ -332,7 +334,7 @@ func contentType(req *http.Request) int {
 	}
 }
 
-func (m *Metad) rootHandler(req *http.Request, closeChan <-chan bool) (interface{}, *HttpError) {
+func (m *Metad) rootHandler(req *http.Request, closeChan <-chan bool) (currentVersion uint64, result interface{}, httpErr *HttpError) {
 	clientIP := m.requestIP(req)
 	vars := mux.Vars(req)
 	nodePath := vars["nodePath"]
@@ -340,25 +342,33 @@ func (m *Metad) rootHandler(req *http.Request, closeChan <-chan bool) (interface
 		nodePath = "/"
 	}
 	wait := strings.ToLower(req.FormValue("wait")) == "true"
-	var result interface{}
 	if wait {
-		change := strings.ToLower(req.FormValue("change")) != "false"
-		result = m.metadataRepo.Watch(clientIP, nodePath, closeChan)
-		if !change {
-			result = m.metadataRepo.Root(clientIP, nodePath)
+		prevVersionStr := req.FormValue("pre_version")
+		var prevVersion int
+		if prevVersionStr != "" {
+			var err error
+			prevVersion, err = strconv.Atoi(prevVersionStr)
+			if err != nil {
+				prevVersion = -1
+			}
+		}
+		if prevVersion > 0 && uint64(prevVersion) < m.metadataRepo.DataVersion() {
+			currentVersion, result = m.metadataRepo.Root(clientIP, nodePath)
+		} else {
+			m.metadataRepo.Watch(clientIP, nodePath, closeChan)
+			// directly return new result to client ,not change, for pre_version.
+			currentVersion, result = m.metadataRepo.Root(clientIP, nodePath)
 		}
 	} else {
-		result = m.metadataRepo.Root(clientIP, nodePath)
+		currentVersion, result = m.metadataRepo.Root(clientIP, nodePath)
 	}
 	if result == nil {
-		return nil, NewHttpError(http.StatusNotFound, "Not found")
-	} else {
-		return result, nil
+		httpErr = NewHttpError(http.StatusNotFound, "Not found")
 	}
-
+	return
 }
 
-func (m *Metad) selfHandler(req *http.Request, closeChan <-chan bool) (interface{}, *HttpError) {
+func (m *Metad) selfHandler(req *http.Request, closeChan <-chan bool) (currentVersion uint64, result interface{}, httpErr *HttpError) {
 	clientIP := m.requestIP(req)
 	vars := mux.Vars(req)
 	nodePath := vars["nodePath"]
@@ -366,21 +376,32 @@ func (m *Metad) selfHandler(req *http.Request, closeChan <-chan bool) (interface
 		nodePath = "/"
 	}
 	wait := strings.ToLower(req.FormValue("wait")) == "true"
-	var result interface{}
+	// TODO this version may be not match the data, get version first, may be cause client repeat get data, but not lost change, so it work for now.
+	currentVersion = m.metadataRepo.DataVersion()
 	if wait {
-		change := strings.ToLower(req.FormValue("change")) != "false"
-		result = m.metadataRepo.WatchSelf(clientIP, nodePath, closeChan)
-		if !change {
+		prevVersionStr := req.FormValue("pre_version")
+		var prevVersion int
+		if prevVersionStr != "" {
+			var err error
+			prevVersion, err = strconv.Atoi(prevVersionStr)
+			if err != nil {
+				prevVersion = -1
+			}
+		}
+		if prevVersion > 0 && uint64(prevVersion) < currentVersion {
+			result = m.metadataRepo.Self(clientIP, nodePath)
+		} else {
+			m.metadataRepo.WatchSelf(clientIP, nodePath, closeChan)
+			// directly return new result to client ,not change, for pre_version.
 			result = m.metadataRepo.Self(clientIP, nodePath)
 		}
 	} else {
 		result = m.metadataRepo.Self(clientIP, nodePath)
 	}
 	if result == nil {
-		return nil, NewHttpError(http.StatusNotFound, "Not found")
-	} else {
-		return result, nil
+		httpErr = NewHttpError(http.StatusNotFound, "Not found")
 	}
+	return
 }
 
 func respondError(w http.ResponseWriter, req *http.Request, msg string, statusCode int) {
@@ -506,7 +527,7 @@ func (m *Metad) requestIP(req *http.Request) string {
 	return clientIp
 }
 
-func (m *Metad) handlerWrapper(handler handlerFunc) func(w http.ResponseWriter, req *http.Request) {
+func (m *Metad) handleWrapper(handler handleFunc) func(w http.ResponseWriter, req *http.Request) {
 
 	return func(w http.ResponseWriter, req *http.Request) {
 		var closeChan <-chan bool
@@ -514,7 +535,36 @@ func (m *Metad) handlerWrapper(handler handlerFunc) func(w http.ResponseWriter, 
 			closeChan = x.CloseNotify()
 		}
 		start := time.Now()
-		result, err := handler(req, closeChan)
+		version, result, err := handler(req, closeChan)
+		w.Header().Add("X-Metad-Version", fmt.Sprintf("%s", version))
+		elapsed := time.Since(start)
+		status := 200
+		var len int
+		if err != nil {
+			status = err.Status
+			respondError(w, req, err.Message, status)
+			m.errorLog(req, status, err.Message)
+		} else {
+			if log.IsDebugEnable() {
+				log.Debug("reponse success: %v", result)
+			}
+			if result == nil {
+				respondSuccessDefault(w, req)
+			} else {
+				len = respondSuccess(w, req, result)
+			}
+		}
+		m.requestLog(req, status, elapsed, len)
+	}
+}
+
+func (m *Metad) manageWrapper(manager manageFunc) func(w http.ResponseWriter, req *http.Request) {
+
+	return func(w http.ResponseWriter, req *http.Request) {
+		start := time.Now()
+		version := m.metadataRepo.DataVersion()
+		result, err := manager(req)
+		w.Header().Add("X-Metad-Version", fmt.Sprintf("%s", version))
 		elapsed := time.Since(start)
 		status := 200
 		var len int
