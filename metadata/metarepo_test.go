@@ -20,7 +20,7 @@ func init() {
 var (
 	backend   = "local"
 	maxNode   = 10
-	sleepTime = 100 * time.Millisecond
+	sleepTime = 200 * time.Millisecond
 )
 
 func TestMetarepoData(t *testing.T) {
@@ -269,6 +269,7 @@ func TestMetarepoSelf(t *testing.T) {
 			"n2": "/nodes/2",
 		},
 	}, false)
+	assert.NoError(t, err)
 
 	time.Sleep(sleepTime)
 	val = metarepo.Self(ip, "/dir/n1/name")
