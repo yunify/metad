@@ -15,7 +15,7 @@ API response content type default is text, client can add "Accept" header to req
 
 ## Metadata API
 
-### GET /{nodePath}
+### GET /{nodePath}[?wait=true&pre_version=$version]
 
 This api for client get metadata, and will process self mapping by client ip.
 
@@ -61,6 +61,16 @@ return origin metadata, for json example.
 }
 ```
 
+#### Parameter
+
+* **wait** if wait=true, server will hold the connection until the metadata change.
+* **prev_version** if this parameter is present, server will check if the metadata has changed after the version, if true, return immediately.
+
+#### Response Headers
+
+* **X-Metad-RequestID** request id for trace.
+* **X-Metad-Version** current metadata's version. can use to wait change request as prev_version's value.
+
 ## Manage API
 
 Manage API default port is 127.0.0.1:9611
@@ -72,7 +82,7 @@ This api is for manage metadata
 * GET show metadata.
 * POST create or replace metadata. 
 * PUT create or merge metadata.
-* DELETE delete metadata.
+* DELETE delete metadata, default delete all metadata in nodePath, unless subs parameter is present.
     
 ### /v1/mapping[/{nodePath}] 
 
@@ -81,7 +91,7 @@ This api is for manage metadata's ip mapping
 * GET show mapping config.
 * POST create or replace mapping config. 
 * PUT create or merge update mapping config.
-* DELETE delete mapping config.
+* DELETE delete mapping config, default delete all metadata in nodePath, unless subs parameter is present.
 
 ### POST /v1/resync
 

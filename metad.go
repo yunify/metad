@@ -573,8 +573,8 @@ func (m *Metad) manageWrapper(manager manageFunc) func(w http.ResponseWriter, re
 		start := time.Now()
 		requestID := m.generateRequestID()
 
-		version := m.metadataRepo.DataVersion()
 		result, err := manager(req)
+		version := m.metadataRepo.DataVersion()
 
 		w.Header().Add("X-Metad-RequestID", requestID)
 		w.Header().Add("X-Metad-Version", fmt.Sprintf("%d", version))

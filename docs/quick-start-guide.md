@@ -328,26 +328,17 @@ In another terminal, we update the node name of 192.168.1.1.
 curl -X PUT -H "Content-Type: application/json" http://127.0.0.1:9611/v1/data/nodes/1/name -d '"n_node1"'
 ```
 
-The first terminal should get the notification and return with changes.
-
-``` json
-{"node":{"name":"UPDATE|n_node1"}}
-```
-
-If we want get metadata other than changes, just add parameter change=false to wait request.
-
-
-```
-curl -H "Accept: application/json" -H "X-Forwarded-For: 192.168.1.1" "http://127.0.0.1:8080/self/?wait=true&change=false"
-```
-
-We update the node name of 192.168.1.1 again.
-
-```
-curl -X PUT -H "Content-Type: application/json" http://127.0.0.1:9611/v1/data/nodes/1/name -d '"nn_node1"'
-```
-We get the notification and return with metadata
+The first terminal should get the notification and return with latest result after change.
 
 ``` json
 {"node":{"ip":"192.168.1.1","name":"nn_node1"}}
 ```
+
+If we want to ensure that changes are not lost when the client lost connection to server, just add parameter **prev_version** to wait request.
+
+```
+curl -H "Accept: application/json" -H "X-Forwarded-For: 192.168.1.1" "http://127.0.0.1:8080/self/?wait=true&prev_version=10"
+```
+
+If metadata has been changed after version 10, this request will return immediately, else wait new change.
+Everyone response's headers contains **X-Metad-Version** .
