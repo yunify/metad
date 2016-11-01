@@ -2,9 +2,10 @@
 
 source ./env
 
+gen_version
+
 echo "Building metad ..."
 mkdir -p bin
 go build -o bin/metad .
 
-cat version.go.bak > version.go
-rm version.go.bak
+revert_version

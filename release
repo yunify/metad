@@ -2,6 +2,8 @@
 
 source ./env
 
+gen_version
+
 echo "Release metad linux version ..."
 mkdir -p bin/linux
 env GOOS=linux GOARCH=amd64 go build -o bin/linux/metad .
@@ -13,3 +15,5 @@ env GOOS=darwin GOARCH=amd64 go build -o bin/darwin/metad .
 tar -C bin/darwin/ -czf bin/darwin/metad-darwin-amd64.tar.gz metad
 
 ls -lh bin/*
+
+revert_version
