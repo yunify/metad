@@ -7,6 +7,7 @@ import (
 	"github.com/yunify/metad/log"
 	"github.com/yunify/metad/store"
 	"github.com/yunify/metad/util/flatmap"
+	"golang.org/x/net/context"
 	"math/rand"
 	"testing"
 	"time"
@@ -351,14 +352,14 @@ func TestWatch(t *testing.T) {
 	metarepo.DeleteMapping("/")
 	metarepo.DeleteData("/")
 
-	closeChan := make(chan bool)
-	defer close(closeChan)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	ch := make(chan interface{})
 	defer close(ch)
 
 	go func() {
-		ch <- metarepo.Watch("192.168.1.1", "/", closeChan)
+		ch <- metarepo.Watch(ctx, "192.168.1.1", "/")
 	}()
 
 	FillTestData(metarepo)
@@ -379,7 +380,7 @@ func TestWatch(t *testing.T) {
 	//test watch leaf node
 
 	go func() {
-		ch <- metarepo.Watch("192.168.1.1", "/nodes/1/name", closeChan)
+		ch <- metarepo.Watch(ctx, "192.168.1.1", "/nodes/1/name")
 	}()
 	time.Sleep(sleepTime)
 
@@ -419,15 +420,15 @@ func TestWatchSelf(t *testing.T) {
 
 	time.Sleep(sleepTime)
 
-	closeChan := make(chan bool)
-	defer close(closeChan)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	ch := make(chan interface{})
 	defer close(ch)
 
 	for i := 0; i <= 100; i++ {
 		go func() {
-			ch <- metarepo.WatchSelf("192.168.1.1", "/", closeChan)
+			ch <- metarepo.WatchSelf(ctx, "192.168.1.1", "/")
 		}()
 		time.Sleep(sleepTime)
 		//test data change
@@ -454,7 +455,7 @@ func TestWatchSelf(t *testing.T) {
 
 	// test watch self subdir
 	go func() {
-		ch <- metarepo.WatchSelf("192.168.1.1", "/node", closeChan)
+		ch <- metarepo.WatchSelf(ctx, "192.168.1.1", "/node")
 	}()
 
 	time.Sleep(sleepTime)
@@ -500,9 +501,8 @@ func TestWatchCloseChan(t *testing.T) {
 
 	time.Sleep(sleepTime)
 
-	closeChan := make(chan bool)
-
-	closeChan2 := make(chan bool)
+	ctx1, cancel1 := context.WithCancel(context.Background())
+	ctx2, cancel2 := context.WithCancel(context.Background())
 
 	ch := make(chan interface{})
 	defer close(ch)
@@ -511,18 +511,18 @@ func TestWatchCloseChan(t *testing.T) {
 	defer close(ch2)
 
 	go func() {
-		ch <- metarepo.Watch("192.168.1.1", "/", closeChan)
+		ch <- metarepo.Watch(ctx1, "192.168.1.1", "/")
 	}()
 	go func() {
-		ch2 <- metarepo.WatchSelf(ip, "/", closeChan2)
+		ch2 <- metarepo.WatchSelf(ctx2, ip, "/")
 	}()
 
 	time.Sleep(sleepTime)
 
-	close(closeChan)
+	cancel1()
 	result := <-ch
 	assert.NotNil(t, result)
-	close(closeChan2)
+	cancel2()
 	result2 := <-ch2
 	assert.NotNil(t, result2)
 	metarepo.StopSync()
@@ -562,14 +562,13 @@ func TestSelfWatchNodeNotExist(t *testing.T) {
 	//assert.NoError(t, err)
 
 	time.Sleep(sleepTime)
-
-	closeChan := make(chan bool)
-	defer close(closeChan)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	ch := make(chan interface{})
 	defer close(ch)
 	go func() {
-		ch <- metarepo.WatchSelf(ip, "/", closeChan)
+		ch <- metarepo.WatchSelf(ctx, ip, "/")
 	}()
 
 	time.Sleep(sleepTime)

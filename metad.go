@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"github.com/golang/gddo/httputil"
@@ -12,6 +13,7 @@ import (
 	"github.com/yunify/metad/metadata"
 	"github.com/yunify/metad/util/flatmap"
 	yaml "gopkg.in/yaml.v2"
+	"io/ioutil"
 	"net"
 	"net/http"
 	"os"
@@ -46,8 +48,8 @@ func (e HttpError) Error() string {
 	return fmt.Sprintf("%s", e.Message)
 }
 
-type handleFunc func(req *http.Request, closeChan <-chan bool) (int64, interface{}, *HttpError)
-type manageFunc func(req *http.Request) (interface{}, *HttpError)
+type handleFunc func(ctx context.Context, req *http.Request) (int64, interface{}, *HttpError)
+type manageFunc func(ctx context.Context, req *http.Request) (interface{}, *HttpError)
 
 type Metad struct {
 	config       *Config
@@ -186,7 +188,7 @@ func (m *Metad) resync() error {
 	return nil
 }
 
-func (m *Metad) httpResync(req *http.Request) (interface{}, *HttpError) {
+func (m *Metad) httpResync(ctx context.Context, req *http.Request) (interface{}, *HttpError) {
 	respChan := make(chan error)
 	m.resyncChan <- respChan
 	err := <-respChan
@@ -197,7 +199,7 @@ func (m *Metad) httpResync(req *http.Request) (interface{}, *HttpError) {
 	}
 }
 
-func (m *Metad) dataGet(req *http.Request) (interface{}, *HttpError) {
+func (m *Metad) dataGet(ctx context.Context, req *http.Request) (interface{}, *HttpError) {
 	vars := mux.Vars(req)
 	nodePath := vars["nodePath"]
 	if nodePath == "" {
@@ -211,7 +213,7 @@ func (m *Metad) dataGet(req *http.Request) (interface{}, *HttpError) {
 	}
 }
 
-func (m *Metad) dataUpdate(req *http.Request) (interface{}, *HttpError) {
+func (m *Metad) dataUpdate(ctx context.Context, req *http.Request) (interface{}, *HttpError) {
 	vars := mux.Vars(req)
 	nodePath := vars["nodePath"]
 	if nodePath == "" {
@@ -238,7 +240,7 @@ func (m *Metad) dataUpdate(req *http.Request) (interface{}, *HttpError) {
 	}
 }
 
-func (m *Metad) dataDelete(req *http.Request) (interface{}, *HttpError) {
+func (m *Metad) dataDelete(ctx context.Context, req *http.Request) (interface{}, *HttpError) {
 	vars := mux.Vars(req)
 	nodePath := vars["nodePath"]
 	if nodePath == "" {
@@ -257,7 +259,7 @@ func (m *Metad) dataDelete(req *http.Request) (interface{}, *HttpError) {
 	}
 }
 
-func (m *Metad) mappingGet(req *http.Request) (interface{}, *HttpError) {
+func (m *Metad) mappingGet(ctx context.Context, req *http.Request) (interface{}, *HttpError) {
 	vars := mux.Vars(req)
 	nodePath := vars["nodePath"]
 	if nodePath == "" {
@@ -271,15 +273,20 @@ func (m *Metad) mappingGet(req *http.Request) (interface{}, *HttpError) {
 	}
 }
 
-func (m *Metad) mappingUpdate(req *http.Request) (interface{}, *HttpError) {
+func (m *Metad) mappingUpdate(ctx context.Context, req *http.Request) (interface{}, *HttpError) {
 	vars := mux.Vars(req)
 	nodePath := vars["nodePath"]
 	if nodePath == "" {
 		nodePath = "/"
 	}
-	decoder := json.NewDecoder(req.Body)
+	buf, err := ioutil.ReadAll(req.Body)
+	if err != nil {
+		return nil, NewHttpError(http.StatusBadRequest, fmt.Sprintf("read request error:%s", err.Error()))
+	}
+	log.Info("%s\tBODY\t%s", ctx.Value("requestID"), string(buf))
+	decoder := json.NewDecoder(bytes.NewReader(buf))
 	var data interface{}
-	err := decoder.Decode(&data)
+	err = decoder.Decode(&data)
 	if err != nil {
 		return nil, NewHttpError(http.StatusBadRequest, fmt.Sprintf("invalid json format, error:%s", err.Error()))
 	} else {
@@ -298,7 +305,7 @@ func (m *Metad) mappingUpdate(req *http.Request) (interface{}, *HttpError) {
 	}
 }
 
-func (m *Metad) mappingDelete(req *http.Request) (interface{}, *HttpError) {
+func (m *Metad) mappingDelete(ctx context.Context, req *http.Request) (interface{}, *HttpError) {
 	vars := mux.Vars(req)
 	nodePath := vars["nodePath"]
 	if nodePath == "" {
@@ -336,7 +343,7 @@ func contentType(req *http.Request) int {
 	}
 }
 
-func (m *Metad) rootHandler(req *http.Request, closeChan <-chan bool) (currentVersion int64, result interface{}, httpErr *HttpError) {
+func (m *Metad) rootHandler(ctx context.Context, req *http.Request) (currentVersion int64, result interface{}, httpErr *HttpError) {
 	clientIP := m.requestIP(req)
 	vars := mux.Vars(req)
 	nodePath := vars["nodePath"]
@@ -357,7 +364,7 @@ func (m *Metad) rootHandler(req *http.Request, closeChan <-chan bool) (currentVe
 		if prevVersion > 0 && int64(prevVersion) < m.metadataRepo.DataVersion() {
 			currentVersion, result = m.metadataRepo.Root(clientIP, nodePath)
 		} else {
-			m.metadataRepo.Watch(clientIP, nodePath, closeChan)
+			m.metadataRepo.Watch(ctx, clientIP, nodePath)
 			// directly return new result to client ,not change, for keep same as request with prev_version
 			currentVersion, result = m.metadataRepo.Root(clientIP, nodePath)
 		}
@@ -370,7 +377,7 @@ func (m *Metad) rootHandler(req *http.Request, closeChan <-chan bool) (currentVe
 	return
 }
 
-func (m *Metad) selfHandler(req *http.Request, closeChan <-chan bool) (currentVersion int64, result interface{}, httpErr *HttpError) {
+func (m *Metad) selfHandler(ctx context.Context, req *http.Request) (currentVersion int64, result interface{}, httpErr *HttpError) {
 	clientIP := m.requestIP(req)
 	vars := mux.Vars(req)
 	nodePath := vars["nodePath"]
@@ -393,7 +400,7 @@ func (m *Metad) selfHandler(req *http.Request, closeChan <-chan bool) (currentVe
 		if prevVersion > 0 && int64(prevVersion) < currentVersion {
 			result = m.metadataRepo.Self(clientIP, nodePath)
 		} else {
-			m.metadataRepo.WatchSelf(clientIP, nodePath, closeChan)
+			m.metadataRepo.WatchSelf(ctx, clientIP, nodePath)
 			// directly return new result to client ,not change, for pre_version.
 			result = m.metadataRepo.Self(clientIP, nodePath)
 		}
@@ -537,17 +544,20 @@ func (m *Metad) handleWrapper(handler handleFunc) func(w http.ResponseWriter, re
 	return func(w http.ResponseWriter, req *http.Request) {
 		start := time.Now()
 		requestID := m.generateRequestID()
-		var closeChan <-chan bool
-		if x, ok := w.(http.CloseNotifier); ok {
-			closeChan = x.CloseNotify()
-		} else {
-			c := make(chan bool)
-			defer close(c)
-			closeChan = c
-			log.Warning("ResponseWriter is not implement http.CloseNotifier.")
-		}
 
-		version, result, err := handler(req, closeChan)
+		ctx := context.WithValue(req.Context(), "requestID", requestID)
+		cancelCtx, cancelFun := context.WithCancel(ctx)
+		if x, ok := w.(http.CloseNotifier); ok {
+			go func() {
+				select {
+				case <-x.CloseNotify():
+					cancelFun()
+				}
+			}()
+		} else {
+			defer cancelFun()
+		}
+		version, result, err := handler(cancelCtx, req)
 
 		w.Header().Add("X-Metad-RequestID", requestID)
 		w.Header().Add("X-Metad-Version", fmt.Sprintf("%d", version))
@@ -577,8 +587,8 @@ func (m *Metad) manageWrapper(manager manageFunc) func(w http.ResponseWriter, re
 	return func(w http.ResponseWriter, req *http.Request) {
 		start := time.Now()
 		requestID := m.generateRequestID()
-
-		result, err := manager(req)
+		ctx := context.WithValue(req.Context(), "requestID", requestID)
+		result, err := manager(ctx, req)
 		version := m.metadataRepo.DataVersion()
 
 		w.Header().Add("X-Metad-RequestID", requestID)

@@ -1,6 +1,7 @@
 package metadata
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"github.com/yunify/metad/backends"
@@ -98,24 +99,24 @@ func (r *MetadataRepo) Root(clientIP string, nodePath string) (currentVersion in
 	return
 }
 
-func (r *MetadataRepo) Watch(clientIP string, nodePath string, closeChan <-chan bool) interface{} {
+func (r *MetadataRepo) Watch(ctx context.Context, clientIP string, nodePath string) interface{} {
 	nodePath = path.Join("/", nodePath)
 
 	if r.onlySelf {
 		if nodePath == "/" {
-			return r.WatchSelf(clientIP, "/", closeChan)
+			return r.WatchSelf(ctx, clientIP, "/")
 		} else {
 			return nil
 		}
 	} else {
 		w := r.data.Watch(nodePath)
-		return r.changeToResult(w, closeChan)
+		return r.changeToResult(w, ctx.Done())
 	}
 }
 
 var TIMER_NIL *time.Timer = &time.Timer{C: nil}
 
-func (r *MetadataRepo) changeToResult(watcher store.Watcher, stopChan <-chan bool) interface{} {
+func (r *MetadataRepo) changeToResult(watcher store.Watcher, stopChan <-chan struct{}) interface{} {
 	defer watcher.Remove()
 	m := make(map[string]string)
 	timer := TIMER_NIL
@@ -153,7 +154,7 @@ func (r *MetadataRepo) changeToResult(watcher store.Watcher, stopChan <-chan boo
 	return flatmap.Expand(m, "/")
 }
 
-func (r *MetadataRepo) WatchSelf(clientIP string, nodePath string, closeChan <-chan bool) interface{} {
+func (r *MetadataRepo) WatchSelf(ctx context.Context, clientIP string, nodePath string) interface{} {
 	nodePath = path.Join(clientIP, "/", nodePath)
 	if log.IsDebugEnable() {
 		log.Debug("WatchSelf nodePath: %s", nodePath)
@@ -165,7 +166,7 @@ func (r *MetadataRepo) WatchSelf(clientIP string, nodePath string, closeChan <-c
 	mappingWatcher := r.mapping.Watch(nodePath)
 	defer mappingWatcher.Remove()
 
-	stopChan := make(chan bool)
+	stopChan := make(chan struct{})
 
 	go func() {
 		select {
@@ -173,7 +174,7 @@ func (r *MetadataRepo) WatchSelf(clientIP string, nodePath string, closeChan <-c
 			if ok {
 				close(stopChan)
 			}
-		case <-closeChan:
+		case <-ctx.Done():
 			close(stopChan)
 		}
 	}()
