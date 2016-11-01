@@ -2,6 +2,7 @@ package store
 
 import (
 	"fmt"
+	"github.com/yunify/metad/atomic"
 	"github.com/yunify/metad/util"
 	"github.com/yunify/metad/util/flatmap"
 	"path"
@@ -12,9 +13,11 @@ import (
 
 type Store interface {
 	// Get
-	// return a string (nodePath is a leaf node) or
+	// return
+	// currentVersion int64 and
+	// a string (nodePath is a leaf node) or
 	// a map[string]interface{} (nodePath is dir)
-	Get(nodePath string) interface{}
+	Get(nodePath string) (int64, interface{})
 	// Put value can be a map[string]interface{} or string
 	Put(nodePath string, value interface{})
 	Delete(nodePath string)
@@ -23,10 +26,13 @@ type Store interface {
 	Watch(nodePath string) Watcher
 	// Json output store as json
 	Json() string
+	// Version return store's current version
+	Version() int64
 }
 
 type store struct {
 	Root        *node
+	version     atomic.AtomicLong
 	worldLock   sync.RWMutex // stop the world lock
 	watcherLock sync.RWMutex
 }
@@ -38,31 +44,31 @@ func New() Store {
 
 func newStore() *store {
 	s := new(store)
+	s.version = atomic.AtomicLong(int64(0))
 	s.Root = newDir(s, "/", nil)
 	return s
 }
 
 // Get returns a path value.
-func (s *store) Get(nodePath string) interface{} {
+func (s *store) Get(nodePath string) (currentVersion int64, val interface{}) {
 
 	s.worldLock.RLock()
 	defer s.worldLock.RUnlock()
+	currentVersion = s.version.Get()
+	val = nil
 
 	nodePath = path.Clean(path.Join("/", nodePath))
 
 	n := s.internalGet(nodePath)
 	if n != nil {
-		val := n.GetValue()
+		val = n.GetValue()
 		m, mok := val.(map[string]interface{})
 		// treat empty dir as not found result.
 		if mok && len(m) == 0 && !n.IsRoot() {
-			return nil
-		} else {
-			return val
+			val = nil
 		}
 	}
-
-	return nil
+	return
 }
 
 // Put creates or update the node at nodePath, value should a map[string]interface{} or a string
@@ -100,6 +106,7 @@ func (s *store) Delete(nodePath string) {
 	if n == nil { // if the node does not exist, treat as success
 		return
 	}
+	s.version.IncrementAndGet()
 	n.Remove()
 }
 
@@ -128,6 +135,10 @@ func (s *store) Json() string {
 	return s.Root.Json()
 }
 
+func (s *store) Version() int64 {
+	return s.version.Get()
+}
+
 // walk walks all the nodePath and apply the walkFunc on each directory
 func (s *store) walk(nodePath string, walkFunc func(prev *node, component string) *node) *node {
 	components := strings.Split(nodePath, "/")
@@ -149,6 +160,8 @@ func (s *store) walk(nodePath string, walkFunc func(prev *node, component string
 }
 
 func (s *store) internalPut(nodePath string, value string) *node {
+
+	s.version.IncrementAndGet()
 
 	// nodePath is "/", just ignore put value.
 	if nodePath == "/" {

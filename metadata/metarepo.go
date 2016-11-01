@@ -1,6 +1,7 @@
 package metadata
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"github.com/yunify/metad/backends"
@@ -71,56 +72,51 @@ func (r *MetadataRepo) StopSync() {
 	r.mappingStopChan <- true
 }
 
-func (r *MetadataRepo) Root(clientIP string, nodePath string) interface{} {
+func (r *MetadataRepo) Root(clientIP string, nodePath string) (currentVersion int64, val interface{}) {
 	nodePath = path.Join("/", nodePath)
 	if r.onlySelf {
+		currentVersion = r.data.Version()
 		if nodePath == "/" {
-			val := make(map[string]interface{})
+			mapVal := make(map[string]interface{})
 			selfVal := r.Self(clientIP, "/")
 			if selfVal != nil {
-				val["self"] = selfVal
+				mapVal["self"] = selfVal
 			}
-			return val
-		} else {
-			return nil
+			val = mapVal
 		}
 	} else {
-		val := r.data.Get(nodePath)
-		if val == nil {
-			return nil
-		} else {
-			if nodePath == "/" {
-				selfVal := r.Self(clientIP, "/")
-				if selfVal != nil {
-					mapVal, ok := val.(map[string]interface{})
-					if ok {
-						mapVal["self"] = selfVal
-					}
+		currentVersion, val = r.data.Get(nodePath)
+		if val != nil && nodePath == "/" {
+			selfVal := r.Self(clientIP, "/")
+			if selfVal != nil {
+				mapVal, ok := val.(map[string]interface{})
+				if ok {
+					mapVal["self"] = selfVal
 				}
 			}
-			return val
 		}
 	}
+	return
 }
 
-func (r *MetadataRepo) Watch(clientIP string, nodePath string, closeChan <-chan bool) interface{} {
+func (r *MetadataRepo) Watch(ctx context.Context, clientIP string, nodePath string) interface{} {
 	nodePath = path.Join("/", nodePath)
 
 	if r.onlySelf {
 		if nodePath == "/" {
-			return r.WatchSelf(clientIP, "/", closeChan)
+			return r.WatchSelf(ctx, clientIP, "/")
 		} else {
 			return nil
 		}
 	} else {
 		w := r.data.Watch(nodePath)
-		return r.changeToResult(w, closeChan)
+		return r.changeToResult(w, ctx.Done())
 	}
 }
 
 var TIMER_NIL *time.Timer = &time.Timer{C: nil}
 
-func (r *MetadataRepo) changeToResult(watcher store.Watcher, stopChan <-chan bool) interface{} {
+func (r *MetadataRepo) changeToResult(watcher store.Watcher, stopChan <-chan struct{}) interface{} {
 	defer watcher.Remove()
 	m := make(map[string]string)
 	timer := TIMER_NIL
@@ -158,7 +154,7 @@ func (r *MetadataRepo) changeToResult(watcher store.Watcher, stopChan <-chan boo
 	return flatmap.Expand(m, "/")
 }
 
-func (r *MetadataRepo) WatchSelf(clientIP string, nodePath string, closeChan <-chan bool) interface{} {
+func (r *MetadataRepo) WatchSelf(ctx context.Context, clientIP string, nodePath string) interface{} {
 	nodePath = path.Join(clientIP, "/", nodePath)
 	if log.IsDebugEnable() {
 		log.Debug("WatchSelf nodePath: %s", nodePath)
@@ -170,16 +166,16 @@ func (r *MetadataRepo) WatchSelf(clientIP string, nodePath string, closeChan <-c
 	mappingWatcher := r.mapping.Watch(nodePath)
 	defer mappingWatcher.Remove()
 
-	stopChan := make(chan bool)
-	defer close(stopChan)
+	stopChan := make(chan struct{})
+
 	go func() {
 		select {
 		case _, ok := <-mappingWatcher.EventChan():
 			if ok {
-				stopChan <- true
+				close(stopChan)
 			}
-		case <-closeChan:
-			stopChan <- true
+		case <-ctx.Done():
+			close(stopChan)
 		}
 	}()
 
@@ -202,6 +198,9 @@ func (r *MetadataRepo) WatchSelf(clientIP string, nodePath string, closeChan <-c
 }
 
 func (r *MetadataRepo) Self(clientIP string, nodePath string) interface{} {
+	if clientIP == "" {
+		panic(errors.New("clientIP must not be empty."))
+	}
 	nodePath = path.Join("/", nodePath)
 	mappingData := r.GetMapping(path.Join("/", clientIP))
 	if mappingData == nil {
@@ -220,7 +219,8 @@ func (r *MetadataRepo) Self(clientIP string, nodePath string) interface{} {
 
 func (r *MetadataRepo) getMappingData(nodePath, link string) interface{} {
 	nodePath = path.Join(link, nodePath)
-	return r.data.Get(nodePath)
+	_, val := r.data.Get(nodePath)
+	return val
 }
 
 func (r *MetadataRepo) getMappingDatas(nodePath string, mapping map[string]interface{}) interface{} {
@@ -270,7 +270,8 @@ func (r *MetadataRepo) getMappingDatas(nodePath string, mapping map[string]inter
 }
 
 func (r *MetadataRepo) GetData(nodePath string) interface{} {
-	return r.data.Get(nodePath)
+	_, val := r.data.Get(nodePath)
+	return val
 }
 
 func (r *MetadataRepo) PutData(nodePath string, data interface{}, replace bool) error {
@@ -285,7 +286,7 @@ func (r *MetadataRepo) DeleteData(nodePath string, subs ...string) error {
 	if len(subs) > 0 {
 		for _, sub := range subs {
 			subPath := path.Join(nodePath, sub)
-			v := r.data.Get(subPath)
+			_, v := r.data.Get(subPath)
 			// if subPath metadata not exist, just ignore.
 			if v != nil {
 				_, dir := v.(map[string]interface{})
@@ -297,7 +298,7 @@ func (r *MetadataRepo) DeleteData(nodePath string, subs ...string) error {
 		}
 		return nil
 	} else {
-		v := r.data.Get(nodePath)
+		_, v := r.data.Get(nodePath)
 		if v != nil {
 			_, dir := v.(map[string]interface{})
 			return r.storeClient.Delete(nodePath, dir)
@@ -308,7 +309,8 @@ func (r *MetadataRepo) DeleteData(nodePath string, subs ...string) error {
 }
 
 func (r *MetadataRepo) GetMapping(nodePath string) interface{} {
-	return r.mapping.Get(nodePath)
+	_, val := r.mapping.Get(nodePath)
+	return val
 }
 
 func (r *MetadataRepo) PutMapping(nodePath string, data interface{}, replace bool) error {
@@ -368,7 +370,7 @@ func (r *MetadataRepo) DeleteMapping(nodePath string, subs ...string) error {
 	if len(subs) > 0 {
 		for _, sub := range subs {
 			subPath := path.Join(nodePath, sub)
-			v := r.mapping.Get(subPath)
+			_, v := r.mapping.Get(subPath)
 			// if subPath mapping not exist, just ignore.
 			if v != nil {
 				_, dir := v.(map[string]interface{})
@@ -380,13 +382,17 @@ func (r *MetadataRepo) DeleteMapping(nodePath string, subs ...string) error {
 		}
 		return nil
 	} else {
-		v := r.mapping.Get(nodePath)
+		_, v := r.mapping.Get(nodePath)
 		if v != nil {
 			_, dir := v.(map[string]interface{})
 			return r.storeClient.DeleteMapping(nodePath, dir)
 		}
 		return nil
 	}
+}
+
+func (r *MetadataRepo) DataVersion() int64 {
+	return r.data.Version()
 }
 
 func checkSubs(subs []string) error {

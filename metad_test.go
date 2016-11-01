@@ -2,10 +2,12 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"github.com/stretchr/testify/assert"
 	"github.com/yunify/metad/log"
 	"github.com/yunify/metad/util"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -130,7 +132,10 @@ func TestMetad(t *testing.T) {
 	w = httptest.NewRecorder()
 	metad.manageRouter.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
-	m := parse(w).(map[string]interface{})
+	result := parse(w)
+	v := parseVersion(w)
+	assert.True(t, v > 0)
+	m := result.(map[string]interface{})
 	assert.Equal(t, "value3", m["key3"])
 	//key1 has been replaced.
 	assert.Equal(t, nil, m["key1"])
@@ -144,7 +149,17 @@ func TestMetad(t *testing.T) {
 
 	time.Sleep(sleepTime)
 
-	//test self request
+	//test self request /
+
+	req = httptest.NewRequest("GET", "/self", nil)
+	req.RemoteAddr = "192.168.1.1:1234"
+	req.Header.Set("accept", "application/json")
+	w = httptest.NewRecorder()
+	metad.router.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
+	assert.Equal(t, "node1", util.GetMapValue(parse(w), "/node/name"))
+
+	//test self request sub node
 	req = httptest.NewRequest("GET", "/self/node/name", nil)
 	req.RemoteAddr = "192.168.1.1:1234"
 	req.Header.Set("accept", "application/json")
@@ -163,7 +178,7 @@ func TestMetad(t *testing.T) {
 
 	// node1 self not found.
 	req = httptest.NewRequest("GET", "/self/node/name", nil)
-	req.RemoteAddr = "192.168.1.1"
+	req.RemoteAddr = "192.168.1.1:1234"
 	req.Header.Set("accept", "application/json")
 	w = httptest.NewRecorder()
 	metad.router.ServeHTTP(w, req)
@@ -171,8 +186,183 @@ func TestMetad(t *testing.T) {
 
 }
 
+func TestMetadWatch(t *testing.T) {
+	config := &Config{
+		Backend: testBackend,
+	}
+	metad, err := New(config)
+	assert.NoError(t, err)
+
+	metad.Init()
+
+	defer metad.Stop()
+
+	dataJson := `
+	{
+		"nodes": {
+	"1": {
+	"ip": "192.168.1.1",
+	"name": "node1"
+	}
+	}
+	}
+	`
+	data := make(map[string]interface{})
+	json.Unmarshal([]byte(dataJson), &data)
+
+	req := httptest.NewRequest("PUT", "/v1/data/", strings.NewReader(dataJson))
+	w := httptest.NewRecorder()
+	metad.manageRouter.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
+
+	time.Sleep(sleepTime)
+	versions := make(chan int, 1)
+	go func() {
+		req := httptest.NewRequest("GET", "/nodes/1/ip?wait=true", nil)
+		req.Header.Set("accept", "application/json")
+
+		w := httptest.NewRecorder()
+		metad.router.ServeHTTP(w, req)
+		assert.Equal(t, 200, w.Code)
+		version := parseVersion(w)
+		versions <- version
+	}()
+
+	time.Sleep(sleepTime)
+
+	req = httptest.NewRequest("PUT", "/v1/data/nodes/1/ip", strings.NewReader(`"192.168.2.1"`))
+	w = httptest.NewRecorder()
+	metad.manageRouter.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
+
+	v := <-versions
+	assert.True(t, v >= 0)
+
+	// change again
+	req = httptest.NewRequest("PUT", "/v1/data/nodes/1/ip", strings.NewReader(`"192.168.3.1"`))
+	w = httptest.NewRecorder()
+	metad.manageRouter.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
+
+	//wait with prev_version should return immediately
+	req = httptest.NewRequest("GET", fmt.Sprintf("/nodes/1/ip?wait=true&prev_version=%d", v), nil)
+	req.Header.Set("accept", "application/json")
+	w = httptest.NewRecorder()
+	metad.router.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
+	v2 := parseVersion(w)
+	assert.True(t, v2 > v)
+	assert.Equal(t, "192.168.3.1", parse(w))
+}
+
+func TestMetadWatchSelf(t *testing.T) {
+	config := &Config{
+		Backend: testBackend,
+	}
+	metad, err := New(config)
+	assert.NoError(t, err)
+
+	metad.Init()
+
+	defer metad.Stop()
+
+	dataJson := `
+	{
+		"nodes": {
+	"1": {
+	"ip": "192.168.1.1",
+	"name": "node1"
+	}
+	}
+	}
+	`
+	data := make(map[string]interface{})
+	json.Unmarshal([]byte(dataJson), &data)
+
+	req := httptest.NewRequest("PUT", "/v1/data/", strings.NewReader(dataJson))
+	w := httptest.NewRecorder()
+	metad.manageRouter.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
+
+	req = httptest.NewRequest("POST", "/v1/mapping", strings.NewReader(`{"192.168.1.1":{"node":"/nodes/1"}}`))
+	w = httptest.NewRecorder()
+	metad.manageRouter.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
+
+	time.Sleep(sleepTime)
+
+	//test self request
+	req = httptest.NewRequest("GET", "/self", nil)
+	req.RemoteAddr = "192.168.1.1:1234"
+	req.Header.Set("accept", "application/json")
+	w = httptest.NewRecorder()
+	metad.router.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
+	assert.Equal(t, "node1", util.GetMapValue(parse(w), "/node/name"))
+
+	versions := make(chan int, 1)
+	go func() {
+		req := httptest.NewRequest("GET", "/self?wait=true", nil)
+		req.Header.Set("accept", "application/json")
+		req.RemoteAddr = "192.168.1.1:1234"
+		w := httptest.NewRecorder()
+		metad.router.ServeHTTP(w, req)
+		assert.Equal(t, 200, w.Code)
+		assert.Equal(t, "192.168.2.1", util.GetMapValue(parse(w), "/node/ip"))
+		version := parseVersion(w)
+		versions <- version
+	}()
+
+	time.Sleep(sleepTime)
+
+	req = httptest.NewRequest("PUT", "/v1/data/nodes/1/ip", strings.NewReader(`"192.168.2.1"`))
+	w = httptest.NewRecorder()
+	metad.manageRouter.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
+
+	v := <-versions
+	assert.True(t, v >= 0)
+
+	// change again
+	req = httptest.NewRequest("PUT", "/v1/data/nodes/1/ip", strings.NewReader(`"192.168.3.1"`))
+	w = httptest.NewRecorder()
+	metad.manageRouter.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
+
+	time.Sleep(sleepTime)
+
+	//wait with prev_version should return immediately
+	req = httptest.NewRequest("GET", fmt.Sprintf("/self?wait=true&prev_version=%d", v), nil)
+	req.Header.Set("accept", "application/json")
+	req.RemoteAddr = "192.168.1.1:1234"
+	w = httptest.NewRecorder()
+	metad.router.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
+	v2 := parseVersion(w)
+	assert.True(t, v2 > v)
+	assert.Equal(t, "192.168.3.1", util.GetMapValue(parse(w), "/node/ip"))
+}
+
+func parseVersion(w *httptest.ResponseRecorder) int {
+	versionHeader := w.Header().Get("X-Metad-Version")
+	var version int
+	if versionHeader != "" {
+		var err error
+		version, err = strconv.Atoi(versionHeader)
+		if err != nil {
+			version = -1
+		}
+	}
+	return version
+}
+
 func parse(w *httptest.ResponseRecorder) interface{} {
+	requestID := w.Header().Get("X-Metad-RequestID")
 	var result interface{}
-	json.Unmarshal(w.Body.Bytes(), &result)
+	log.Debug("%s response %s", requestID, w.Body.String())
+	err := json.Unmarshal(w.Body.Bytes(), &result)
+	if err != nil {
+		log.Error("json_err: %s", err.Error())
+	}
 	return result
 }
