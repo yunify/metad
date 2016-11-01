@@ -197,6 +197,9 @@ func (r *MetadataRepo) WatchSelf(clientIP string, nodePath string, closeChan <-c
 }
 
 func (r *MetadataRepo) Self(clientIP string, nodePath string) interface{} {
+	if clientIP == "" {
+		panic(errors.New("clientIP must not be empty."))
+	}
 	nodePath = path.Join("/", nodePath)
 	mappingData := r.GetMapping(path.Join("/", clientIP))
 	if mappingData == nil {

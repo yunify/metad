@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/golang/gddo/httputil"
 	"github.com/gorilla/mux"
+	"github.com/yunify/metad/atomic"
 	"github.com/yunify/metad/backends"
 	"github.com/yunify/metad/log"
 	"github.com/yunify/metad/metadata"
@@ -54,6 +55,7 @@ type Metad struct {
 	router       *mux.Router
 	manageRouter *mux.Router
 	resyncChan   chan chan error
+	requestIDGen atomic.AtomicLong
 }
 
 func New(config *Config) (*Metad, error) {
@@ -343,7 +345,7 @@ func (m *Metad) rootHandler(req *http.Request, closeChan <-chan bool) (currentVe
 	}
 	wait := strings.ToLower(req.FormValue("wait")) == "true"
 	if wait {
-		prevVersionStr := req.FormValue("pre_version")
+		prevVersionStr := req.FormValue("prev_version")
 		var prevVersion int
 		if prevVersionStr != "" {
 			var err error
@@ -356,7 +358,7 @@ func (m *Metad) rootHandler(req *http.Request, closeChan <-chan bool) (currentVe
 			currentVersion, result = m.metadataRepo.Root(clientIP, nodePath)
 		} else {
 			m.metadataRepo.Watch(clientIP, nodePath, closeChan)
-			// directly return new result to client ,not change, for pre_version.
+			// directly return new result to client ,not change, for keep same as request with prev_version
 			currentVersion, result = m.metadataRepo.Root(clientIP, nodePath)
 		}
 	} else {
@@ -379,7 +381,7 @@ func (m *Metad) selfHandler(req *http.Request, closeChan <-chan bool) (currentVe
 	// TODO this version may be not match the data, get version first, may be cause client repeat get data, but not lost change, so it work for now.
 	currentVersion = m.metadataRepo.DataVersion()
 	if wait {
-		prevVersionStr := req.FormValue("pre_version")
+		prevVersionStr := req.FormValue("prev_version")
 		var prevVersion int
 		if prevVersionStr != "" {
 			var err error
@@ -523,38 +525,45 @@ func (m *Metad) requestIP(req *http.Request) string {
 		}
 	}
 
-	clientIp, _, _ := net.SplitHostPort(req.RemoteAddr)
+	clientIp, _, err := net.SplitHostPort(req.RemoteAddr)
+	if err != nil {
+		log.Error("Get RequestIP error: %s", err.Error())
+	}
 	return clientIp
 }
 
 func (m *Metad) handleWrapper(handler handleFunc) func(w http.ResponseWriter, req *http.Request) {
 
 	return func(w http.ResponseWriter, req *http.Request) {
+		start := time.Now()
+		requestID := m.generateRequestID()
 		var closeChan <-chan bool
 		if x, ok := w.(http.CloseNotifier); ok {
 			closeChan = x.CloseNotify()
 		}
-		start := time.Now()
+
 		version, result, err := handler(req, closeChan)
-		w.Header().Add("X-Metad-Version", fmt.Sprintf("%s", version))
+
+		w.Header().Add("X-Metad-RequestID", requestID)
+		w.Header().Add("X-Metad-Version", fmt.Sprintf("%d", version))
 		elapsed := time.Since(start)
 		status := 200
 		var len int
 		if err != nil {
 			status = err.Status
 			respondError(w, req, err.Message, status)
-			m.errorLog(req, status, err.Message)
+			m.errorLog(requestID, req, status, err.Message)
 		} else {
-			if log.IsDebugEnable() {
-				log.Debug("reponse success: %v", result)
-			}
 			if result == nil {
 				respondSuccessDefault(w, req)
 			} else {
 				len = respondSuccess(w, req, result)
+				if log.IsDebugEnable() {
+					log.Debug("%s\tRESP\t%v", requestID, result)
+				}
 			}
 		}
-		m.requestLog(req, status, elapsed, len)
+		m.requestLog(requestID, version, req, status, elapsed, len)
 	}
 }
 
@@ -562,38 +571,46 @@ func (m *Metad) manageWrapper(manager manageFunc) func(w http.ResponseWriter, re
 
 	return func(w http.ResponseWriter, req *http.Request) {
 		start := time.Now()
+		requestID := m.generateRequestID()
+
 		version := m.metadataRepo.DataVersion()
 		result, err := manager(req)
-		w.Header().Add("X-Metad-Version", fmt.Sprintf("%s", version))
+
+		w.Header().Add("X-Metad-RequestID", requestID)
+		w.Header().Add("X-Metad-Version", fmt.Sprintf("%d", version))
 		elapsed := time.Since(start)
 		status := 200
 		var len int
 		if err != nil {
 			status = err.Status
 			respondError(w, req, err.Message, status)
-			m.errorLog(req, status, err.Message)
+			m.errorLog(requestID, req, status, err.Message)
 		} else {
-			if log.IsDebugEnable() {
-				log.Debug("reponse success: %v", result)
-			}
 			if result == nil {
 				respondSuccessDefault(w, req)
 			} else {
 				len = respondSuccess(w, req, result)
+				if log.IsDebugEnable() {
+					log.Debug("%s\tRESP\t%v", requestID, result)
+				}
 			}
 		}
-		m.requestLog(req, status, elapsed, len)
+		m.requestLog(requestID, version, req, status, elapsed, len)
 	}
 }
 
-func (m *Metad) requestLog(req *http.Request, status int, elapsed time.Duration, len int) {
-	log.Info("REQ\t%s\t%s\t%s\t%v\t%v\t%v\t%v", req.Method, m.requestIP(req), req.RequestURI, req.ContentLength, status, int64(elapsed.Seconds()*1000), len)
+func (m *Metad) generateRequestID() string {
+	return fmt.Sprintf("REQ-%d", m.requestIDGen.IncrementAndGet())
 }
 
-func (m *Metad) errorLog(req *http.Request, status int, msg string) {
+func (m *Metad) requestLog(requestID string, version int64, req *http.Request, status int, elapsed time.Duration, len int) {
+	log.Info("%s\t%d\t%s\t%s\t%s\t%v\t%v\t%v\t%v", requestID, version, req.Method, m.requestIP(req), req.URL.RequestURI(), req.ContentLength, status, int64(elapsed.Seconds()*1000), len)
+}
+
+func (m *Metad) errorLog(requestID string, req *http.Request, status int, msg string) {
 	if status == 500 {
-		log.Error("ERR\t%s\t%s\t%s\t%v\t%v\t%s", req.Method, m.requestIP(req), req.RequestURI, req.ContentLength, status, msg)
+		log.Error("ERR\t%s\t%s\t%s\t%s\t%v\t%v\t%s", requestID, req.Method, m.requestIP(req), req.RequestURI, req.ContentLength, status, msg)
 	} else {
-		log.Warning("ERR\t%s\t%s\t%s\t%v\t%v\t%s", req.Method, m.requestIP(req), req.RequestURI, req.ContentLength, status, msg)
+		log.Warning("ERR\t%s\t%s\t%s\t%s\t%v\t%v\t%s", requestID, req.Method, m.requestIP(req), req.RequestURI, req.ContentLength, status, msg)
 	}
 }
