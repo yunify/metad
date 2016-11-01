@@ -175,6 +175,8 @@ func (r *MetadataRepo) WatchSelf(clientIP string, nodePath string, closeChan <-c
 			}
 		case <-closeChan:
 			stopChan <- true
+		case <-stopChan:
+			return
 		}
 	}()
 
