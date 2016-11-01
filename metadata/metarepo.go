@@ -166,17 +166,15 @@ func (r *MetadataRepo) WatchSelf(clientIP string, nodePath string, closeChan <-c
 	defer mappingWatcher.Remove()
 
 	stopChan := make(chan bool)
-	defer close(stopChan)
+
 	go func() {
 		select {
 		case _, ok := <-mappingWatcher.EventChan():
 			if ok {
-				stopChan <- true
+				close(stopChan)
 			}
 		case <-closeChan:
-			stopChan <- true
-		case <-stopChan:
-			return
+			close(stopChan)
 		}
 	}()
 

@@ -540,6 +540,11 @@ func (m *Metad) handleWrapper(handler handleFunc) func(w http.ResponseWriter, re
 		var closeChan <-chan bool
 		if x, ok := w.(http.CloseNotifier); ok {
 			closeChan = x.CloseNotify()
+		} else {
+			c := make(chan bool)
+			defer close(c)
+			closeChan = c
+			log.Warning("ResponseWriter is not implement http.CloseNotifier.")
 		}
 
 		version, result, err := handler(req, closeChan)

@@ -501,10 +501,8 @@ func TestWatchCloseChan(t *testing.T) {
 	time.Sleep(sleepTime)
 
 	closeChan := make(chan bool)
-	defer close(closeChan)
 
 	closeChan2 := make(chan bool)
-	defer close(closeChan2)
 
 	ch := make(chan interface{})
 	defer close(ch)
@@ -521,10 +519,10 @@ func TestWatchCloseChan(t *testing.T) {
 
 	time.Sleep(sleepTime)
 
-	closeChan <- true
+	close(closeChan)
 	result := <-ch
 	assert.NotNil(t, result)
-	closeChan2 <- true
+	close(closeChan2)
 	result2 := <-ch2
 	assert.NotNil(t, result2)
 	metarepo.StopSync()
