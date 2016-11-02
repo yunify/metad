@@ -353,15 +353,15 @@ func (m *Metad) rootHandler(ctx context.Context, req *http.Request) (currentVers
 	wait := strings.ToLower(req.FormValue("wait")) == "true"
 	if wait {
 		prevVersionStr := req.FormValue("prev_version")
-		var prevVersion int
+		var prevVersion int64
 		if prevVersionStr != "" {
 			var err error
-			prevVersion, err = strconv.Atoi(prevVersionStr)
+			prevVersion, err = strconv.ParseInt(prevVersionStr, 10, 64)
 			if err != nil {
 				prevVersion = -1
 			}
 		}
-		if prevVersion > 0 && int64(prevVersion) < m.metadataRepo.DataVersion() {
+		if prevVersion > 0 && prevVersion != m.metadataRepo.DataVersion() {
 			currentVersion, result = m.metadataRepo.Root(clientIP, nodePath)
 		} else {
 			m.metadataRepo.Watch(ctx, clientIP, nodePath)
@@ -389,15 +389,17 @@ func (m *Metad) selfHandler(ctx context.Context, req *http.Request) (currentVers
 	currentVersion = m.metadataRepo.DataVersion()
 	if wait {
 		prevVersionStr := req.FormValue("prev_version")
-		var prevVersion int
+		var prevVersion int64
 		if prevVersionStr != "" {
 			var err error
-			prevVersion, err = strconv.Atoi(prevVersionStr)
+			prevVersion, err = strconv.ParseInt(prevVersionStr, 10, 64)
 			if err != nil {
 				prevVersion = -1
 			}
 		}
-		if prevVersion > 0 && int64(prevVersion) < currentVersion {
+		// if prevVersion < currentVersion, client lost change, so return immediately.
+		// if prevVersion > currentVersion, may be metad reboot and recount version, so return immediately, let client use new version.
+		if prevVersion > 0 && prevVersion != currentVersion {
 			result = m.metadataRepo.Self(clientIP, nodePath)
 		} else {
 			m.metadataRepo.WatchSelf(ctx, clientIP, nodePath)
