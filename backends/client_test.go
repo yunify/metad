@@ -325,16 +325,16 @@ func TestClientSync(t *testing.T) {
 		storeClient.Sync(metastore, stopChan)
 
 		testData := FillTestData(storeClient)
-		time.Sleep(1000 * time.Millisecond)
-		ValidTestData(t, testData, metastore)
+		time.Sleep(2000 * time.Millisecond)
+		ValidTestData(t, testData, metastore, backend)
 
 		RandomUpdate(testData, storeClient, 10)
 		time.Sleep(1000 * time.Millisecond)
-		ValidTestData(t, testData, metastore)
+		ValidTestData(t, testData, metastore, backend)
 
 		deletedKey := RandomDelete(testData, storeClient)
 		time.Sleep(1000 * time.Millisecond)
-		ValidTestData(t, testData, metastore)
+		ValidTestData(t, testData, metastore, backend)
 
 		_, val := metastore.Get(deletedKey)
 		assert.Nil(t, val)
@@ -507,9 +507,9 @@ func RandomDelete(testData map[string]string, storeClient StoreClient) string {
 	return key
 }
 
-func ValidTestData(t *testing.T, testData map[string]string, metastore store.Store) {
+func ValidTestData(t *testing.T, testData map[string]string, metastore store.Store, backend string) {
 	for k, v := range testData {
 		_, storeVal := metastore.Get(k)
-		assert.Equal(t, v, storeVal)
+		assert.Equal(t, v, storeVal, "valid data fail for backend %s", backend)
 	}
 }
