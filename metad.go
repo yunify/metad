@@ -550,9 +550,10 @@ func (m *Metad) handleWrapper(handler handleFunc) func(w http.ResponseWriter, re
 		ctx := context.WithValue(req.Context(), "requestID", requestID)
 		cancelCtx, cancelFun := context.WithCancel(ctx)
 		if x, ok := w.(http.CloseNotifier); ok {
+			closeNotify := x.CloseNotify()
 			go func() {
 				select {
-				case <-x.CloseNotify():
+				case <-closeNotify:
 					cancelFun()
 				}
 			}()
