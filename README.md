@@ -9,7 +9,7 @@ metad
 * metadata backend support [etcd](https://github.com/coreos/etcd)(include v2 and v3 api) (TODO support more).
 * support metadata local cache, so it can be used as a proxy to reducing the request pressure of backend (etcd).
 * api out format support json/yaml/text,and is metadata/developer friendly data structure.
-* support as [confd](https://github.com/kelseyhightower/confd)'s backend.
+* support as [confd](https://github.com/yunify/confd)'s backend.
 
 
 ## Getting Started
