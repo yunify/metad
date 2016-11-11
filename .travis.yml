@@ -26,12 +26,12 @@ deploy:
     file:
         - "bin/linux/metad-linux-amd64.tar.gz"
         - "bin/darwin/metad-darwin-amd64.tar.gz"
+        - "bin/alpine/metad-darwin-amd64.tar.gz"
     on:
         repo: yunify/metad
         tags: true
 after_success:
     - docker login -e="$DOCKER_EMAIL" -u="$DOCKER_USERNAME" -p="$DOCKER_PASSWORD";
-    - docker run -ti --rm -v $(pwd):/app qingcloud/metad_builder_alpine ./build
     - docker build -t qingcloud/metad .
     - if [ "$TRAVIS_BRANCH" == "master" ]; then
         docker push qingcloud/metad;

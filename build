@@ -2,10 +2,12 @@
 
 source ./env
 
+OUTPUT=${1:-bin/confd}
+
 gen_version
 
 echo "Building metad ..."
 mkdir -p bin
-go build -o bin/metad .
+go build -o $OUTPUT .
 
 revert_version

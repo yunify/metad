@@ -6,7 +6,6 @@ REPO_PATH="${ORG_PATH}/metad"
 function gen_version {
 VERSION=${TRAVIS_TAG:-1.0.dev}
 GIT_VERSION=$(git rev-parse --verify -q HEAD)
-cp version.go version.go.bak
 cat <<EOT > version.go
 package main
 
@@ -16,6 +15,5 @@ EOT
 }
 
 function revert_version {
-    cat version.go.bak > version.go
-    rm version.go.bak
+git checkout version.go
 }
