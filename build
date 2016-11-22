@@ -2,7 +2,7 @@
 
 source ./env
 
-OUTPUT=${1:-bin/confd}
+OUTPUT=${1:-bin/metad}
 
 gen_version
 
