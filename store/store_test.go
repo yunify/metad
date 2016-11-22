@@ -3,6 +3,7 @@ package store
 import (
 	"fmt"
 	"github.com/stretchr/testify/assert"
+	"sync"
 	"testing"
 	"time"
 )
@@ -285,4 +286,48 @@ func TestBlankNode(t *testing.T) {
 	_, val = s.Get("/test/node")
 	assert.Equal(t, val, "n1")
 
+}
+
+func TestConcurrentWatchAndPut(t *testing.T) {
+	s := New()
+	loop := 5000
+	wg := sync.WaitGroup{}
+	wg.Add(3)
+	starter := sync.WaitGroup{}
+	starter.Add(1)
+	go func() {
+		starter.Wait()
+		for i := 0; i < loop; i++ {
+			w := s.Watch("/nodes/1")
+			w.Remove()
+		}
+		wg.Done()
+	}()
+
+	go func() {
+		starter.Wait()
+		for i := 0; i < loop; i++ {
+			s.Put("/nodes/1/name", "n1")
+			s.Delete("/nodes/1/name")
+		}
+		wg.Done()
+	}()
+
+	//go func() {
+	//	starter.Wait()
+	//	for i:=0;i<loop; i++ {
+	//		s.Delete("/nodes/1/name")
+	//	}
+	//	wg.Done()
+	//}()
+
+	go func() {
+		starter.Wait()
+		for i := 0; i < loop; i++ {
+			s.Get("/nodes/1")
+		}
+		wg.Done()
+	}()
+	starter.Done()
+	wg.Wait()
 }

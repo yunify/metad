@@ -293,9 +293,11 @@ func (n *node) Watch() Watcher {
 		}
 		w.removed = true
 		n.watchers.Remove(elem)
-		if n.watchers.Len() == 0 {
-			n.Clean()
-		}
+		//TODO node clean on watcher remove will cause "concurrent map read and map write" error
+		//refactor this to use another method to do this.
+		//if n.watchers.Len() == 0 {
+		//	n.Clean()
+		//}
 	}
 
 	return w
