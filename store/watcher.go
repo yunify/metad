@@ -43,7 +43,7 @@ type watcher struct {
 
 func newWatcher(node *node) *watcher {
 	w := &watcher{
-		eventChan: make(chan *Event, 50),
+		eventChan: make(chan *Event, 100),
 		node:      node,
 	}
 	return w
