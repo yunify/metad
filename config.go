@@ -153,7 +153,7 @@ func processFlags(config *Config) {
 }
 
 func setConfigFromFlag(config *Config, f *flag.Flag) {
-	fmt.Printf("process arg name: %s, value: %s, default: %s", f.Name, f.Value.String(), f.DefValue)
+	fmt.Printf("process arg name: %s, value: %s, default: %s\n", f.Name, f.Value.String(), f.DefValue)
 	switch f.Name {
 	case "backend":
 		config.Backend = backend

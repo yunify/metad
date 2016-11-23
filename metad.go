@@ -107,7 +107,6 @@ func (m *Metad) initManageRouter() {
 	m.manageRouter.HandleFunc("/favicon.ico", http.NotFound)
 
 	v1 := m.manageRouter.PathPrefix("/v1").Subrouter()
-	v1.HandleFunc("/resync", m.manageWrapper(m.httpResync)).Methods("POST")
 
 	v1.HandleFunc("/mapping", m.manageWrapper(m.mappingGet)).Methods("GET")
 	v1.HandleFunc("/mapping", m.manageWrapper(m.mappingUpdate)).Methods("POST", "PUT")
@@ -181,22 +180,6 @@ func (m *Metad) watchSignals() {
 func (m *Metad) watchManage() {
 	log.Info("Listening for Manage on %s", m.config.ListenManage)
 	go http.ListenAndServe(m.config.ListenManage, m.manageRouter)
-}
-
-func (m *Metad) resync() error {
-	m.metadataRepo.ReSync()
-	return nil
-}
-
-func (m *Metad) httpResync(ctx context.Context, req *http.Request) (interface{}, *HttpError) {
-	respChan := make(chan error)
-	m.resyncChan <- respChan
-	err := <-respChan
-	if err == nil {
-		return nil, nil
-	} else {
-		return nil, NewServerError(err)
-	}
 }
 
 func (m *Metad) dataGet(ctx context.Context, req *http.Request) (interface{}, *HttpError) {

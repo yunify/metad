@@ -93,6 +93,3 @@ This api is for manage metadata's ip mapping
 * PUT create or merge update mapping config.
 * DELETE delete mapping config, default delete all metadata in nodePath, unless subs parameter is present.
 
-### POST /v1/resync
-
-resync metadata and mapping from backend.

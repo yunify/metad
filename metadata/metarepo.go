@@ -57,19 +57,12 @@ func (r *MetadataRepo) startMappingSync() {
 	r.storeClient.SyncMapping(r.mapping, r.mappingStopChan)
 }
 
-func (r *MetadataRepo) ReSync() {
-	log.Info("ReSync")
-	//TODO lock
-	r.StopSync()
-	r.data.Delete("/")
-	r.mapping.Delete("/")
-	r.StartSync()
-}
-
 func (r *MetadataRepo) StopSync() {
 	log.Info("Stop Sync")
 	r.metaStopChan <- true
 	r.mappingStopChan <- true
+	r.data.Destroy()
+	r.mapping.Destroy()
 }
 
 func (r *MetadataRepo) Root(clientIP string, nodePath string) (currentVersion int64, val interface{}) {
