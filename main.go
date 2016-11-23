@@ -7,6 +7,7 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 	"os"
+	"runtime"
 	"time"
 )
 
@@ -23,8 +24,10 @@ func main() {
 	flag.Parse()
 
 	if printVersion {
-		fmt.Printf("version: %s\n", VERSION)
-		fmt.Printf("git version: %s\n", GIT_VERSION)
+		fmt.Printf("Metad Version: %s\n", VERSION)
+		fmt.Printf("Git Version: %s\n", GIT_VERSION)
+		fmt.Printf("Go Version: %s\n", runtime.Version())
+		fmt.Printf("Go OS/Arch: %s/%s\n", runtime.GOOS, runtime.GOARCH)
 		os.Exit(0)
 	}
 
