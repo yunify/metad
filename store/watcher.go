@@ -43,7 +43,7 @@ type watcher struct {
 
 func newWatcher(node *node) *watcher {
 	w := &watcher{
-		eventChan: make(chan *Event, 10),
+		eventChan: make(chan *Event, 50),
 		node:      node,
 	}
 	return w
@@ -54,8 +54,8 @@ func (w *watcher) EventChan() chan *Event {
 }
 
 func (w *watcher) Remove() {
-	w.node.store.watcherLock.Lock()
-	defer w.node.store.watcherLock.Unlock()
+	w.node.watcherLock.Lock()
+	defer w.node.watcherLock.Unlock()
 
 	close(w.eventChan)
 	if w.remove != nil {

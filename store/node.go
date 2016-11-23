@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"path"
+	"sync"
 )
 
 type node struct {
@@ -18,6 +19,8 @@ type node struct {
 	Children map[string]*node `json:"children"` // for directory
 
 	store *store // A reference to the store this node is attached to.
+
+	watcherLock sync.RWMutex
 }
 
 func newKV(store *store, nodeName string, value string, parent *node) *node {
@@ -25,12 +28,13 @@ func newKV(store *store, nodeName string, value string, parent *node) *node {
 		panic(errors.New("nodeName can not be emtpy."))
 	}
 	n := &node{
-		Name:     nodeName,
-		parent:   parent,
-		watchers: nil,
-		Children: nil,
-		Value:    value,
-		store:    store,
+		Name:        nodeName,
+		parent:      parent,
+		watchers:    nil,
+		Children:    nil,
+		Value:       value,
+		store:       store,
+		watcherLock: sync.RWMutex{},
 	}
 	parent.Add(n)
 	n.Notify(Update)
@@ -184,7 +188,7 @@ func (n *node) Remove() bool {
 
 	if !n.IsDir() {
 		// do not remove node has watcher
-		if n.watchers != nil && n.watchers.Len() > 0 {
+		if n.HasWatcher() {
 			n.Value = ""
 			n.AsDir()
 			return true
@@ -207,7 +211,7 @@ func (n *node) Remove() bool {
 		node.Remove()
 	}
 
-	if n.parent != nil && n.parent.Children[n.Name] == n && n.ChildrenCount() == 0 && (n.watchers == nil || n.watchers.Len() == 0) {
+	if n.parent != nil && n.parent.Children[n.Name] == n && n.ChildrenCount() == 0 && !n.HasWatcher() {
 		delete(n.parent.Children, n.Name)
 		n.parent.Clean()
 		return true
@@ -223,7 +227,7 @@ func (n *node) Clean() bool {
 	// if children is empty, try to remove  or covert to leaf node .
 	if n.ChildrenCount() == 0 {
 		if n.Value == "" {
-			if n.watchers == nil || n.watchers.Len() == 0 {
+			if !n.HasWatcher() {
 				return n.Remove()
 			}
 		} else {
@@ -258,15 +262,24 @@ func (n *node) GetValue() interface{} {
 }
 
 func (n *node) internalNotify(action string, eventNode *node) {
-	n.store.watcherLock.RLock()
-	if n.watchers != nil && n.watchers.Len() > 0 {
+
+	if n.HasWatcher() {
 		event := newEvent(action, eventNode.RelativePath(n), eventNode.Value)
+		n.watcherLock.RLock()
 		for e := n.watchers.Front(); e != nil; e = e.Next() {
 			w := e.Value.(Watcher)
-			w.EventChan() <- event
+			//if chan is full, just ignore.
+			//avoid to block
+			select {
+			case w.EventChan() <- event:
+			default:
+				//TODO
+				println("drop event:", event.String())
+				break
+			}
 		}
+		n.watcherLock.RUnlock()
 	}
-	n.store.watcherLock.RUnlock()
 
 	// pop up event.
 	if n.parent != nil {
@@ -279,8 +292,8 @@ func (n *node) Notify(action string) {
 }
 
 func (n *node) Watch() Watcher {
-	n.store.watcherLock.Lock()
-	defer n.store.watcherLock.Unlock()
+	n.watcherLock.Lock()
+	defer n.watcherLock.Unlock()
 
 	if n.watchers == nil {
 		n.watchers = list.New()
@@ -288,22 +301,27 @@ func (n *node) Watch() Watcher {
 	w := newWatcher(n)
 	elem := n.watchers.PushBack(w)
 	w.remove = func() {
+
 		if w.removed { // avoid removing it twice
 			return
 		}
 		w.removed = true
 		n.watchers.Remove(elem)
-		//TODO node clean on watcher remove will cause "concurrent map read and map write" error
-		//refactor this to use another method to do this.
-		//if n.watchers.Len() == 0 {
-		//	n.Clean()
-		//}
+		if n.watchers.Len() == 0 {
+			n.store.Clean(n.Path())
+		}
 	}
 
 	return w
 }
 
-func (s *node) Json() string {
-	b, _ := json.Marshal(s)
+func (n *node) Json() string {
+	b, _ := json.Marshal(n)
 	return string(b)
+}
+
+func (n *node) HasWatcher() bool {
+	n.watcherLock.RLock()
+	defer n.watcherLock.RUnlock()
+	return n.watchers != nil && n.watchers.Len() > 0
 }

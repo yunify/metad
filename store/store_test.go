@@ -3,52 +3,56 @@ package store
 import (
 	"fmt"
 	"github.com/stretchr/testify/assert"
+	"net/http"
+	_ "net/http/pprof"
 	"sync"
 	"testing"
 	"time"
 )
 
 func TestStoreBasic(t *testing.T) {
-	store := New()
+	s := New()
 
-	_, val := store.Get("/foo")
+	_, val := s.Get("/foo")
 	assert.Nil(t, val)
 
-	store.Put("/foo", "bar")
+	s.Put("/foo", "bar")
 
 	//println(store.Json())
 
-	_, val = store.Get("/foo")
+	_, val = s.Get("/foo")
 	assert.Equal(t, "bar", val)
 
-	store.Delete("/foo")
+	s.Delete("/foo")
 
-	_, val = store.Get("/foo")
+	_, val = s.Get("/foo")
 	assert.Nil(t, val)
+	s.Destroy()
 }
 
 func TestStoreDir(t *testing.T) {
-	store := New()
+	s := New()
 
-	store.Put("/foo/foo1", "")
+	s.Put("/foo/foo1", "")
 
-	_, val := store.Get("/foo")
+	_, val := s.Get("/foo")
 	_, mok := val.(map[string]interface{})
 	assert.True(t, mok)
 
-	store.Put("/foo/foo1/key1", "val1")
-	_, val = store.Get("/foo/foo1/key1")
+	s.Put("/foo/foo1/key1", "val1")
+	_, val = s.Get("/foo/foo1/key1")
 	assert.Equal(t, "val1", val)
 
-	store.Delete("/foo/foo1")
+	s.Delete("/foo/foo1")
 
-	_, val = store.Get("/foo/foo1")
+	_, val = s.Get("/foo/foo1")
 	assert.Nil(t, val)
+	s.Destroy()
 
 }
 
 func TestStoreBulk(t *testing.T) {
-	store := New()
+	s := New()
 
 	//store.Set("/clusters", true, nil)
 	values := make(map[string]string)
@@ -56,17 +60,18 @@ func TestStoreBulk(t *testing.T) {
 		values[fmt.Sprintf("/clusters/%v/ip", i)] = fmt.Sprintf("192.168.0.%v", i)
 		values[fmt.Sprintf("/clusters/%v/name", i)] = fmt.Sprintf("cluster-%v", i)
 	}
-	store.PutBulk("/", values)
+	s.PutBulk("/", values)
 
-	_, val := store.Get("/clusters/10")
+	_, val := s.Get("/clusters/10")
 
-	_, val = store.Get("/clusters/1/ip")
+	_, val = s.Get("/clusters/1/ip")
 	assert.Equal(t, "192.168.0.1", val)
+	s.Destroy()
 
 }
 
 func TestStoreSets(t *testing.T) {
-	store := New()
+	s := New()
 
 	values := make(map[string]interface{})
 	for i := 1; i <= 10; i++ {
@@ -75,56 +80,59 @@ func TestStoreSets(t *testing.T) {
 			"name": fmt.Sprintf("cluster-%v", i),
 		}
 	}
-	store.Put("/clusters", values)
+	s.Put("/clusters", values)
 
-	_, val := store.Get("/clusters/10")
+	_, val := s.Get("/clusters/10")
 
-	_, val = store.Get("/clusters/1/ip")
+	_, val = s.Get("/clusters/1/ip")
 	assert.Equal(t, "192.168.0.1", val)
+	s.Destroy()
 
 }
 
 func TestStoreNodeToDirPanic(t *testing.T) {
-	store := New()
+	s := New()
 	// first set a node value.
-	store.Put("/nodes/6", "node6")
+	s.Put("/nodes/6", "node6")
 	// create pre node's child's child, will cause panic.
-	store.Put("/nodes/6/label/key1", "value1")
+	s.Put("/nodes/6/label/key1", "value1")
 
-	_, v := store.Get("/nodes/6")
+	_, v := s.Get("/nodes/6")
 	_, mok := v.(map[string]interface{})
 	assert.True(t, mok)
 
-	_, v = store.Get("/nodes/6/label/key1")
+	_, v = s.Get("/nodes/6/label/key1")
 	assert.Equal(t, "value1", v)
+	s.Destroy()
 }
 
 func TestStoreClean(t *testing.T) {
-	store := New()
+	s := New()
 
 	// if dir has children, dir's text value will be hidden.
-	store.Put("/nodes/6", "node6")
-	store.Put("/nodes/6/label/key1", "value1")
+	s.Put("/nodes/6", "node6")
+	s.Put("/nodes/6/label/key1", "value1")
 
 	//println(store.Json())
 
-	store.Delete("/nodes/6/label/key1")
+	s.Delete("/nodes/6/label/key1")
 
 	//println(store.Json())
 
-	_, val := store.Get("/nodes/6/label")
+	_, val := s.Get("/nodes/6/label")
 	assert.Nil(t, val)
 
 	// if dir's children been deleted, and dir has text value ,dir will become a leaf node.
-	_, val = store.Get("/nodes/6")
+	_, val = s.Get("/nodes/6")
 	assert.Equal(t, "node6", val)
 
 	// when delete leaf node, empty parent dir will been auto delete.
-	store.Put("/nodes/7/label/key1", "value1")
-	store.Delete("/nodes/7/label/key1")
+	s.Put("/nodes/7/label/key1", "value1")
+	s.Delete("/nodes/7/label/key1")
 
-	_, val = store.Get("/nodes/7")
+	_, val = s.Get("/nodes/7")
 	assert.Nil(t, val)
+	s.Destroy()
 }
 
 func readEvent(ch chan *Event) *Event {
@@ -209,17 +217,26 @@ func TestWatch(t *testing.T) {
 	assert.Nil(t, e)
 
 	s2 := s.(*store)
+	s2.worldLock.RLock()
 	n := s2.internalGet("/nodes/6")
+	s2.worldLock.RUnlock()
 	assert.NotNil(t, n)
 
 	w.Remove()
 
-	//TODO watcher remove trigger clean nodes
-	//n = s2.internalGet("/nodes/6")
-	//assert.Nil(t, n)
-	//
-	//n = s2.internalGet("/nodes")
-	//assert.Nil(t, n)
+	//wait backend goroutine to clean
+	time.Sleep(5 * time.Second)
+	s2.worldLock.RLock()
+	n = s2.internalGet("/nodes/6")
+	s2.worldLock.RUnlock()
+	assert.Nil(t, n)
+
+	s2.worldLock.RLock()
+	n = s2.internalGet("/nodes")
+	s2.worldLock.RUnlock()
+	assert.Nil(t, n)
+
+	s.Destroy()
 }
 
 func TestWatchRoot(t *testing.T) {
@@ -251,6 +268,7 @@ func TestWatchRoot(t *testing.T) {
 	// expect no more event.
 	assert.Nil(t, e)
 	w.Remove()
+	s.Destroy()
 }
 
 func TestEmptyStore(t *testing.T) {
@@ -270,6 +288,7 @@ func TestEmptyStore(t *testing.T) {
 	assert.Nil(t, e)
 
 	w.Remove()
+	s.Destroy()
 }
 
 func TestBlankNode(t *testing.T) {
@@ -286,12 +305,16 @@ func TestBlankNode(t *testing.T) {
 	s.Put("/test//node", "n1")
 	_, val = s.Get("/test/node")
 	assert.Equal(t, val, "n1")
+	s.Destroy()
 
 }
 
 func TestConcurrentWatchAndPut(t *testing.T) {
+	go func() {
+		println(http.ListenAndServe("localhost:6060", nil))
+	}()
 	s := New()
-	loop := 5000
+	loop := 50000
 	wg := sync.WaitGroup{}
 	wg.Add(3)
 	starter := sync.WaitGroup{}
@@ -300,6 +323,20 @@ func TestConcurrentWatchAndPut(t *testing.T) {
 		starter.Wait()
 		for i := 0; i < loop; i++ {
 			w := s.Watch("/nodes/1")
+			go func() {
+				for {
+					select {
+					case _, ok := <-w.EventChan():
+						if ok {
+							//println(e.Path, e.Action)
+						} else {
+							return
+						}
+					default:
+						return
+					}
+				}
+			}()
 			w.Remove()
 		}
 		wg.Done()
@@ -314,14 +351,6 @@ func TestConcurrentWatchAndPut(t *testing.T) {
 		wg.Done()
 	}()
 
-	//go func() {
-	//	starter.Wait()
-	//	for i:=0;i<loop; i++ {
-	//		s.Delete("/nodes/1/name")
-	//	}
-	//	wg.Done()
-	//}()
-
 	go func() {
 		starter.Wait()
 		for i := 0; i < loop; i++ {
@@ -331,4 +360,5 @@ func TestConcurrentWatchAndPut(t *testing.T) {
 	}()
 	starter.Done()
 	wg.Wait()
+	s.Destroy()
 }

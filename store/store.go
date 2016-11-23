@@ -24,17 +24,21 @@ type Store interface {
 	// PutBulk value should be a flatmap
 	PutBulk(nodePath string, value map[string]string)
 	Watch(nodePath string) Watcher
+	// Clean clean the nodePath's node
+	Clean(nodePath string)
 	// Json output store as json
 	Json() string
 	// Version return store's current version
 	Version() int64
+	// Destroy the store
+	Destroy()
 }
 
 type store struct {
-	Root        *node
-	version     atomic.AtomicLong
-	worldLock   sync.RWMutex // stop the world lock
-	watcherLock sync.RWMutex
+	Root      *node
+	version   atomic.AtomicLong
+	worldLock sync.RWMutex // stop the world lock
+	cleanChan chan string
 }
 
 func New() Store {
@@ -46,6 +50,24 @@ func newStore() *store {
 	s := new(store)
 	s.version = atomic.AtomicLong(int64(0))
 	s.Root = newDir(s, "/", nil)
+	s.cleanChan = make(chan string, 100)
+	go func() {
+		for {
+			select {
+			case nodePath, ok := <-s.cleanChan:
+				if ok {
+					s.worldLock.Lock()
+					node := s.internalGet(nodePath)
+					if node != nil {
+						node.Clean()
+					}
+					s.worldLock.Unlock()
+				} else {
+					return
+				}
+			}
+		}
+	}()
 	return s
 }
 
@@ -103,7 +125,8 @@ func (s *store) Delete(nodePath string) {
 	nodePath = path.Clean(path.Join("/", nodePath))
 
 	n := s.internalGet(nodePath)
-	if n == nil { // if the node does not exist, treat as success
+	if n == nil {
+		// if the node does not exist, treat as success
 		return
 	}
 	s.version.IncrementAndGet()
@@ -139,6 +162,23 @@ func (s *store) Version() int64 {
 	return s.version.Get()
 }
 
+func (s *store) Clean(nodePath string) {
+	select {
+	case s.cleanChan <- nodePath:
+	default:
+		println("drop clean node:", nodePath)
+		break
+	}
+
+}
+
+func (s *store) Destroy() {
+	s.worldLock.Lock()
+	defer s.worldLock.Unlock()
+	close(s.cleanChan)
+	s.Root = nil
+}
+
 // walk walks all the nodePath and apply the walkFunc on each directory
 func (s *store) walk(nodePath string, walkFunc func(prev *node, component string) *node) *node {
 	components := strings.Split(nodePath, "/")
@@ -146,7 +186,8 @@ func (s *store) walk(nodePath string, walkFunc func(prev *node, component string
 	curr := s.Root
 
 	for i := 1; i < len(components); i++ {
-		if len(components[i]) == 0 { // ignore empty string
+		if len(components[i]) == 0 {
+			// ignore empty string
 			return curr
 		}
 
@@ -199,6 +240,9 @@ func (s *store) internalPutBulk(nodePath string, values map[string]string) {
 func (s *store) internalGet(nodePath string) *node {
 
 	walkFunc := func(parent *node, name string) *node {
+		if parent == nil {
+			return nil
+		}
 
 		if !parent.IsDir() {
 			return nil
