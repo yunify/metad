@@ -56,7 +56,6 @@ type Metad struct {
 	metadataRepo *metadata.MetadataRepo
 	router       *mux.Router
 	manageRouter *mux.Router
-	resyncChan   chan chan error
 	requestIDGen atomic.AtomicLong
 }
 
@@ -81,7 +80,7 @@ func New(config *Config) (*Metad, error) {
 	}
 
 	metadataRepo := metadata.New(config.OnlySelf, storeClient)
-	return &Metad{config: config, metadataRepo: metadataRepo, router: mux.NewRouter(), manageRouter: mux.NewRouter(), resyncChan: make(chan chan error)}, nil
+	return &Metad{config: config, metadataRepo: metadataRepo, router: mux.NewRouter(), manageRouter: mux.NewRouter()}, nil
 }
 
 func (m *Metad) Init() {
@@ -142,25 +141,6 @@ func (m *Metad) Stop() {
 }
 
 func (m *Metad) watchSignals() {
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, syscall.SIGHUP)
-
-	go func() {
-		for range c {
-			log.Info("Received HUP signal")
-			m.resyncChan <- nil
-		}
-	}()
-
-	go func() {
-		for resp := range m.resyncChan {
-			err := m.resync()
-			if resp != nil {
-				resp <- err
-			}
-		}
-	}()
-
 	notifier := make(chan os.Signal, 1)
 	signal.Notify(notifier, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
