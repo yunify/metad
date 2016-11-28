@@ -58,10 +58,6 @@ func TestMetarepoData(t *testing.T) {
 
 	metarepo.DeleteData("/nodes/0")
 
-	if backend == "etcd" {
-		//TODO etcd v2 current not support watch children delete. so try resync
-		metarepo.ReSync()
-	}
 	time.Sleep(sleepTime)
 	val = metarepo.GetData("/nodes/0")
 	assert.Nil(t, val)
@@ -254,10 +250,6 @@ func TestMetarepoSelf(t *testing.T) {
 	//test date delete
 	metarepo.DeleteData(fmt.Sprintf("/nodes/%v/name", p))
 
-	if backend == "etcd" {
-		//etcd v2 current not support watch children's children delete. so try resync
-		metarepo.ReSync()
-	}
 	time.Sleep(sleepTime)
 	val = metarepo.Self(ip, "/node/name")
 	assert.Nil(t, val)

@@ -6,7 +6,7 @@ metad
 `metad` is a metadata server support the following features:
 
 * **self** semantic support. metad keep a mapping of IP and metadata, client direct request "/self", will get the metadata of current node. mapping settings is store to backend.
-* metadata backend support [etcd](https://github.com/coreos/etcd)(include v2 and v3 api) (TODO support more).
+* metadata backend support [etcd](https://github.com/coreos/etcd) (TODO support more).
 * support metadata local cache, so it can be used as a proxy to reducing the request pressure of backend (etcd).
 * api out format support json/yaml/text,and is metadata/developer friendly data structure.
 * support as [confd](https://github.com/yunify/confd)'s backend.

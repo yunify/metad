@@ -14,7 +14,6 @@ import (
 
 var (
 	backendNodes = []string{
-		"etcd",
 		"etcdv3",
 		"local",
 	}
@@ -412,7 +411,7 @@ func TestMappingSync(t *testing.T) {
 
 		//for test init sync.
 
-		for i := 0; i < 10; i++ {
+		for i := 0; i < 5; i++ {
 			ip := fmt.Sprintf("192.168.1.%v", i)
 			mapping := map[string]string{
 				"instance": fmt.Sprintf("/instances/%v", i),
@@ -424,7 +423,7 @@ func TestMappingSync(t *testing.T) {
 		storeClient.SyncMapping(mappingstore, stopChan)
 		time.Sleep(1000 * time.Millisecond)
 
-		for i := 0; i < 10; i++ {
+		for i := 0; i < 5; i++ {
 			ip := fmt.Sprintf("192.168.1.%v", i)
 			_, val := mappingstore.Get(ip)
 			mapVal, mok := val.(map[string]interface{})
@@ -433,7 +432,7 @@ func TestMappingSync(t *testing.T) {
 			assert.Equal(t, path, fmt.Sprintf("/instances/%v", i))
 		}
 
-		for i := 10; i < 20; i++ {
+		for i := 5; i < 10; i++ {
 			ip := fmt.Sprintf("192.168.1.%v", i)
 			mapping := map[string]string{
 				"instance": fmt.Sprintf("/instances/%v", i),
@@ -443,7 +442,7 @@ func TestMappingSync(t *testing.T) {
 		}
 		time.Sleep(1000 * time.Millisecond)
 
-		for i := 10; i < 20; i++ {
+		for i := 5; i < 10; i++ {
 			ip := fmt.Sprintf("192.168.1.%v", i)
 			_, val := mappingstore.Get(ip)
 			mapVal, mok := val.(map[string]interface{})
@@ -464,9 +463,9 @@ func TestMappingSync(t *testing.T) {
 
 func FillTestData(storeClient StoreClient) map[string]string {
 	testData := make(map[string]interface{})
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 5; i++ {
 		ci := make(map[string]string)
-		for j := 0; j < 10; j++ {
+		for j := 0; j < 5; j++ {
 			ci[fmt.Sprintf("%v", j)] = fmt.Sprintf("%v-%v", i, j)
 		}
 		testData[fmt.Sprintf("%v", i)] = ci
