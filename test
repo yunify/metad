@@ -23,4 +23,4 @@ TEST=${split[@]/#/${REPO_PATH}/}
 
 echo "Running tests... ${TEST}"
 #--race -cpu 1,2,4
-go test --race --cpu 4 -timeout 5m ${COVER} -run=Test $@ ${TEST}
+go test --race --cpu 1,2,4 -timeout 1m ${COVER} -run=Test $@ ${TEST}

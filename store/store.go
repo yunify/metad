@@ -23,7 +23,7 @@ type Store interface {
 	Delete(nodePath string)
 	// PutBulk value should be a flatmap
 	PutBulk(nodePath string, value map[string]string)
-	Watch(nodePath string) Watcher
+	Watch(nodePath string, buf int) Watcher
 	// Clean clean the nodePath's node
 	Clean(nodePath string)
 	// Json output store as json
@@ -133,7 +133,7 @@ func (s *store) Delete(nodePath string) {
 	n.Remove()
 }
 
-func (s *store) Watch(nodePath string) Watcher {
+func (s *store) Watch(nodePath string, buf int) Watcher {
 	s.worldLock.Lock()
 	defer s.worldLock.Unlock()
 	var n *node
@@ -151,7 +151,7 @@ func (s *store) Watch(nodePath string) Watcher {
 			n = newDir(s, nodeName, d)
 		}
 	}
-	return n.Watch()
+	return n.Watch(buf)
 }
 
 func (s *store) Json() string {

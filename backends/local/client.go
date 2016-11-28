@@ -80,7 +80,7 @@ func (c *Client) SyncMapping(mapping store.Store, stopChan chan bool) {
 }
 
 func (c *Client) internalSync(name string, from store.Store, to store.Store, stopChan chan bool) {
-	w := from.Watch("/")
+	w := from.Watch("/", 5000)
 	_, meta := from.Get("/")
 	if meta != nil {
 		to.Put("/", meta)

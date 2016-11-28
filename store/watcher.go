@@ -41,9 +41,9 @@ type watcher struct {
 	remove    func()
 }
 
-func newWatcher(node *node) *watcher {
+func newWatcher(node *node, bufLen int) *watcher {
 	w := &watcher{
-		eventChan: make(chan *Event, 100),
+		eventChan: make(chan *Event, bufLen),
 		node:      node,
 	}
 	return w

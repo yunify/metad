@@ -149,7 +149,7 @@ func readEvent(ch chan *Event) *Event {
 func TestWatch(t *testing.T) {
 	s := New()
 	//watch a no exist node
-	w := s.Watch("/nodes/6")
+	w := s.Watch("/nodes/6", 100)
 	s.Put("/nodes/6", "node6")
 	e := readEvent(w.EventChan())
 	assert.Equal(t, Update, e.Action)
@@ -244,7 +244,7 @@ func TestWatchRoot(t *testing.T) {
 	s.Put("/nodes/6/name", "node6")
 
 	//watch root
-	w := s.Watch("/")
+	w := s.Watch("/", 100)
 	s.Put("/nodes/6/ip", "192.168.1.1")
 
 	var e *Event
@@ -281,7 +281,7 @@ func TestEmptyStore(t *testing.T) {
 	_, val = s.Get("/")
 	assert.Equal(t, 0, len(val.(map[string]interface{})))
 
-	w := s.Watch("/")
+	w := s.Watch("/", 10)
 	assert.NotNil(t, w)
 	s.Delete("/")
 	e := readEvent(w.EventChan())
@@ -322,7 +322,7 @@ func TestConcurrentWatchAndPut(t *testing.T) {
 	go func() {
 		starter.Wait()
 		for i := 0; i < loop; i++ {
-			w := s.Watch("/nodes/1")
+			w := s.Watch("/nodes/1", 1000)
 			go func() {
 				for {
 					select {

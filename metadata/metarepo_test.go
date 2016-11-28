@@ -427,7 +427,7 @@ func TestWatchSelf(t *testing.T) {
 	ch := make(chan interface{})
 	defer close(ch)
 
-	for i := 0; i <= 100; i++ {
+	for i := 0; i <= 10; i++ {
 		go func() {
 			ch <- metarepo.WatchSelf(ctx, "192.168.1.1", "/")
 		}()
@@ -469,7 +469,7 @@ func TestWatchSelf(t *testing.T) {
 	m, mok := result.(map[string]interface{})
 	assert.True(t, mok)
 	//println(fmt.Sprintf("%v", m))
-	assert.Equal(t, "DELETE|n1_100", m["name"])
+	assert.Equal(t, "DELETE|n1_10", m["name"])
 
 	log.Debug("TimerPool stat,total New:%v, Get:%v", metarepo.timerPool.TotalNew.Get(), metarepo.timerPool.TotalGet.Get())
 	metarepo.StopSync()

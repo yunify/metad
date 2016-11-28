@@ -16,6 +16,8 @@ import (
 	"time"
 )
 
+const DEFAULT_WATCH_BUF_LEN = 100
+
 type MetadataRepo struct {
 	onlySelf        bool
 	mapping         store.Store
@@ -111,7 +113,7 @@ func (r *MetadataRepo) Watch(ctx context.Context, clientIP string, nodePath stri
 			return nil
 		}
 	} else {
-		w := r.data.Watch(nodePath)
+		w := r.data.Watch(nodePath, DEFAULT_WATCH_BUF_LEN)
 		return r.changeToResult(w, ctx.Done())
 	}
 }
@@ -169,7 +171,7 @@ func (r *MetadataRepo) WatchSelf(ctx context.Context, clientIP string, nodePath 
 	if mappingData == nil {
 		return nil
 	}
-	mappingWatcher := r.mapping.Watch(nodePath)
+	mappingWatcher := r.mapping.Watch(nodePath, DEFAULT_WATCH_BUF_LEN)
 	defer mappingWatcher.Remove()
 
 	stopChan := make(chan struct{})
@@ -189,13 +191,13 @@ func (r *MetadataRepo) WatchSelf(ctx context.Context, clientIP string, nodePath 
 	if !mok {
 		dataNodePath := fmt.Sprintf("%s", mappingData)
 		//log.Debug("watcher: %v", dataNodePath)
-		w := r.data.Watch(dataNodePath)
+		w := r.data.Watch(dataNodePath, DEFAULT_WATCH_BUF_LEN)
 		return r.changeToResult(w, stopChan)
 	} else {
 		flatMapping := flatmap.Flatten(mapping)
 		watchers := make(map[string]store.Watcher)
 		for k, v := range flatMapping {
-			watchers[k] = r.data.Watch(v)
+			watchers[k] = r.data.Watch(v, DEFAULT_WATCH_BUF_LEN)
 		}
 		//log.Debug("aggWatcher: %v", watchers)
 		aggWatcher := store.NewAggregateWatcher(watchers)

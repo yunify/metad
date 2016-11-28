@@ -268,9 +268,13 @@ func (n *node) internalNotify(action string, eventNode *node) {
 		n.watcherLock.RLock()
 		for e := n.watchers.Front(); e != nil; e = e.Next() {
 			w := e.Value.(Watcher)
-			//TODO avoid block
 			select {
 			case w.EventChan() <- event:
+				break
+			default:
+				//avoid block, just drop
+				//TODO use a more grace method.
+				println("drop event:", event.Path, event.Action, event.Value)
 			}
 		}
 		n.watcherLock.RUnlock()
@@ -286,14 +290,14 @@ func (n *node) Notify(action string) {
 	n.internalNotify(action, n)
 }
 
-func (n *node) Watch() Watcher {
+func (n *node) Watch(bufLen int) Watcher {
 	n.watcherLock.Lock()
 	defer n.watcherLock.Unlock()
 
 	if n.watchers == nil {
 		n.watchers = list.New()
 	}
-	w := newWatcher(n)
+	w := newWatcher(n, bufLen)
 	elem := n.watchers.PushBack(w)
 	w.remove = func() {
 
