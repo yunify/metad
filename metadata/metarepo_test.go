@@ -14,13 +14,13 @@ import (
 )
 
 func init() {
-	log.SetLevel("debug")
+	log.SetLevel("info")
 	rand.Seed(int64(time.Now().Nanosecond()))
 }
 
 var (
 	backend   = "local"
-	maxNode   = 10
+	maxNode   = 5
 	sleepTime = 200 * time.Millisecond
 )
 
@@ -254,6 +254,8 @@ func TestMetarepoSelf(t *testing.T) {
 	val = metarepo.Self(ip, "/node/name")
 	assert.Nil(t, val)
 
+	metarepo.PutData(fmt.Sprintf("/nodes/%v/name", p), fmt.Sprintf("node%v", p), true)
+
 	//test mapping dir
 
 	err = metarepo.PutMapping(ip, map[string]interface{}{
@@ -266,6 +268,10 @@ func TestMetarepoSelf(t *testing.T) {
 
 	time.Sleep(sleepTime)
 	val = metarepo.Self(ip, "/dir/n1/name")
+	if val != "node1" {
+		log.Error("except node1, but get %s, ip: %s, data: %s, mapping:%s", val, ip, metarepo.data.Json(), metarepo.mapping.Json())
+		t.Fatal("except node1, but get", val)
+	}
 	assert.Equal(t, "node1", val)
 
 	metarepo.DeleteData("/")
