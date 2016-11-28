@@ -59,20 +59,13 @@ func (r *MetadataRepo) startMappingSync() {
 	r.storeClient.SyncMapping(r.mapping, r.mappingStopChan)
 }
 
-func (r *MetadataRepo) ReSync() {
-	log.Info("ReSync")
-	//TODO lock
-	r.StopSync()
-	r.data = store.New()
-	r.mapping = store.New()
-	r.StartSync()
-}
-
 func (r *MetadataRepo) StopSync() {
 	log.Info("Stop Sync")
 	r.metaStopChan <- true
 	r.mappingStopChan <- true
+	time.Sleep(1 * time.Second)
 	r.data.Destroy()
+	time.Sleep(1 * time.Second)
 	r.mapping.Destroy()
 }
 

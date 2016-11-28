@@ -14,7 +14,7 @@ import (
 )
 
 func init() {
-	log.SetLevel("info")
+	log.SetLevel("error")
 	rand.Seed(int64(time.Now().Nanosecond()))
 }
 
@@ -354,21 +354,31 @@ func TestWatch(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	ip := "192.168.1.1"
+
 	ch := make(chan interface{})
 	defer close(ch)
 
 	go func() {
-		ch <- metarepo.Watch(ctx, "192.168.1.1", "/")
+		ch <- metarepo.Watch(ctx, ip, "/")
 	}()
 
 	FillTestData(metarepo)
 
+	time.Sleep(sleepTime)
+
 	metarepo.StartSync()
+
 	time.Sleep(sleepTime)
 
 	//println(metarepo.data.Json())
-
-	result := <-ch
+	var result interface{}
+	select {
+	case result = <-ch:
+	case <-time.Tick(sleepTime):
+		log.Error("TestWatch wait timeout, key: /, ip: %s, data: %s, mapping: %s", ip, metarepo.data.Json(), metarepo.mapping.Json())
+		t.Fatal("TestWatch wait timeout")
+	}
 
 	m, mok := result.(map[string]interface{})
 	assert.True(t, mok)
@@ -379,12 +389,19 @@ func TestWatch(t *testing.T) {
 	//test watch leaf node
 
 	go func() {
-		ch <- metarepo.Watch(ctx, "192.168.1.1", "/nodes/1/name")
+		ch <- metarepo.Watch(ctx, ip, "/nodes/1/name")
 	}()
 	time.Sleep(sleepTime)
 
 	metarepo.PutData("/nodes/1/name", "n1", false)
-	result = <-ch
+
+	select {
+	case result = <-ch:
+	case <-time.Tick(sleepTime):
+		log.Error("TestWatch wait timeout for key /nodes/1/name , ip: %s, data: %s, mapping: %s", ip, metarepo.data.Json(), metarepo.mapping.Json())
+		t.Fatal("TestWatch wait timeout")
+	}
+
 	assert.Equal(t, "UPDATE|n1", result)
 	metarepo.StopSync()
 }
