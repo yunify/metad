@@ -134,6 +134,9 @@ func (r *MetadataRepo) changeToResult(watcher store.Watcher, stopChan <-chan str
 					return value
 				}
 				m[e.Path] = value
+				if timer.C != nil {
+					r.timerPool.ReleaseTimer(timer)
+				}
 				timer = r.timerPool.AcquireTimer()
 			} else {
 				finish = true
@@ -145,6 +148,7 @@ func (r *MetadataRepo) changeToResult(watcher store.Watcher, stopChan <-chan str
 			m = make(map[string]string)
 			finish = true
 		}
+
 		if finish {
 			if timer.C != nil {
 				r.timerPool.ReleaseTimer(timer)

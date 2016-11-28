@@ -70,7 +70,7 @@ type aggregateWatcher struct {
 }
 
 func NewAggregateWatcher(watchers map[string]Watcher) Watcher {
-	eventChan := make(chan *Event, len(watchers))
+	eventChan := make(chan *Event, len(watchers)*50)
 	waitGroup := &sync.WaitGroup{}
 	waitGroup.Add(len(watchers))
 	for pathPrefix, watcher := range watchers {

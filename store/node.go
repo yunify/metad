@@ -6,7 +6,6 @@ import (
 	"errors"
 	"path"
 	"sync"
-	"time"
 )
 
 type node struct {
@@ -269,14 +268,9 @@ func (n *node) internalNotify(action string, eventNode *node) {
 		n.watcherLock.RLock()
 		for e := n.watchers.Front(); e != nil; e = e.Next() {
 			w := e.Value.(Watcher)
-			//if chan is full, wait timeout and drop,
-			//avoid to block
+			//TODO avoid block
 			select {
 			case w.EventChan() <- event:
-			case <-time.Tick(100 * time.Millisecond):
-				//TODO
-				println("drop event:", event.String())
-				break
 			}
 		}
 		n.watcherLock.RUnlock()
