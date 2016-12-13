@@ -26,9 +26,12 @@ import (
 )
 
 const (
-	ContentText = 1
-	ContentJSON = 2
-	ContentYAML = 3
+	ContentText     = 1
+	ContentTypeText = "text/plain"
+	ContentJSON     = 2
+	ContentTypeJSON = "application/json"
+	ContentYAML     = 3
+	ContentTypeYAML = "application/yaml"
 )
 
 type HttpError struct {
@@ -431,6 +434,7 @@ func respondSuccess(w http.ResponseWriter, req *http.Request, val interface{}) i
 }
 
 func respondText(w http.ResponseWriter, req *http.Request, val interface{}) int {
+	w.Header().Set("Content-Type", ContentTypeText)
 	if val == nil {
 		fmt.Fprint(w, "")
 		return 0
@@ -461,6 +465,10 @@ func respondText(w http.ResponseWriter, req *http.Request, val interface{}) int 
 }
 
 func respondJSON(w http.ResponseWriter, req *http.Request, val interface{}) int {
+	w.Header().Set("Content-Type", ContentTypeJSON)
+	if val == nil {
+		val = make(map[string]string)
+	}
 	prettyParam := req.FormValue("pretty")
 	pretty := prettyParam != "" && prettyParam != "false"
 	var bytes []byte
@@ -480,6 +488,7 @@ func respondJSON(w http.ResponseWriter, req *http.Request, val interface{}) int 
 }
 
 func respondYAML(w http.ResponseWriter, req *http.Request, val interface{}) int {
+	w.Header().Set("Content-Type", ContentTypeYAML)
 	bytes, err := yaml.Marshal(val)
 	if err == nil {
 		w.Write(bytes)

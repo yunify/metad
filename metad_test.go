@@ -343,6 +343,89 @@ func TestMetadWatchSelf(t *testing.T) {
 	assert.Equal(t, "192.168.3.1", util.GetMapValue(parse(w), "/node/ip"))
 }
 
+func TestMetadMappingDelete(t *testing.T) {
+	config := &Config{
+		Backend: testBackend,
+	}
+	metad, err := New(config)
+	assert.NoError(t, err)
+
+	metad.Init()
+
+	defer metad.Stop()
+
+	dataJson := `
+	{
+		"nodes": {
+	"1": {
+	"ip": "192.168.1.1",
+	"name": "node1"
+	}
+	}
+	}
+	`
+	data := make(map[string]interface{})
+	json.Unmarshal([]byte(dataJson), &data)
+
+	req := httptest.NewRequest("PUT", "/v1/data/", strings.NewReader(dataJson))
+	w := httptest.NewRecorder()
+	metad.manageRouter.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
+	ip := "192.168.1.1"
+	req = httptest.NewRequest("POST", "/v1/mapping", strings.NewReader(`{"192.168.1.1":{"node":"/nodes/1"}}`))
+	w = httptest.NewRecorder()
+	metad.manageRouter.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
+
+	time.Sleep(sleepTime)
+
+	getAndCheckMapping(metad, t, ip, true)
+
+	req = httptest.NewRequest("DELETE", "/v1/mapping?subs=192.168.1.2,,", nil)
+	w = httptest.NewRecorder()
+	metad.manageRouter.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
+
+	time.Sleep(sleepTime)
+
+	getAndCheckMapping(metad, t, ip, true)
+
+	req = httptest.NewRequest("DELETE", "/v1/mapping?subs=,,", nil)
+	w = httptest.NewRecorder()
+	metad.manageRouter.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
+
+	time.Sleep(sleepTime)
+
+	getAndCheckMapping(metad, t, ip, true)
+
+	req = httptest.NewRequest("DELETE", "/v1/mapping?subs=192.168.1.1", nil)
+	w = httptest.NewRecorder()
+	metad.manageRouter.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
+
+	time.Sleep(sleepTime)
+
+	getAndCheckMapping(metad, t, ip, false)
+}
+
+func getAndCheckMapping(metad *Metad, t *testing.T, ip string, exist bool) {
+	req := httptest.NewRequest("GET", "/v1/mapping", nil)
+	req.Header.Set("Accept", "application/json")
+	w := httptest.NewRecorder()
+	metad.manageRouter.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
+
+	mappingJson := w.Body.String()
+	mapping := make(map[string]interface{})
+	err := json.Unmarshal([]byte(mappingJson), &mapping)
+	if err != nil {
+		t.Fatal("Unmarshal err:", mappingJson, err)
+	}
+	_, ok := mapping[ip]
+	assert.True(t, ok == exist)
+}
+
 func parseVersion(w *httptest.ResponseRecorder) int {
 	versionHeader := w.Header().Get("X-Metad-Version")
 	var version int

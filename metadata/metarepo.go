@@ -370,6 +370,10 @@ func (r *MetadataRepo) DeleteMapping(nodePath string, subs ...string) error {
 	}
 	if len(subs) > 0 {
 		for _, sub := range subs {
+			sub = strings.TrimSpace(sub)
+			if sub == "" {
+				continue
+			}
 			subPath := path.Join(nodePath, sub)
 			_, v := r.mapping.Get(subPath)
 			// if subPath mapping not exist, just ignore.
