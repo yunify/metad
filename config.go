@@ -181,7 +181,7 @@ func setConfigFromFlag(config *Config, f *flag.Flag) {
 		config.ClientKey = clientKey
 	case "client_ca_keys":
 		config.ClientCaKeys = clientCaKeys
-	case "node":
+	case "nodes":
 		config.BackendNodes = nodes
 	case "username":
 		config.Username = username
