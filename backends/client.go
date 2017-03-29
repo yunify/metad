@@ -2,12 +2,13 @@ package backends
 
 import (
 	"errors"
+	"path"
+	"strings"
+
 	"github.com/yunify/metad/backends/etcdv3"
 	"github.com/yunify/metad/backends/local"
 	"github.com/yunify/metad/log"
 	"github.com/yunify/metad/store"
-	"path"
-	"strings"
 )
 
 // The StoreClient interface is implemented by objects that can retrieve
@@ -29,7 +30,7 @@ type StoreClient interface {
 // New is used to create a storage client based on our configuration.
 func New(config Config) (StoreClient, error) {
 	if config.Backend == "" {
-		config.Backend = "etcd"
+		config.Backend = "etcdv3"
 	}
 	if config.Group == "" {
 		config.Group = "default"
