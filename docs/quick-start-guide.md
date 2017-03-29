@@ -22,7 +22,7 @@ etcd
 We enable --xff just for fake request ip.
 
 ```
-metad --backend etcdv3 --nodes 127.0.0.1:2379 --log_level debug --listen :8080 --xff
+metad --backend etcdv3 --nodes http://127.0.0.1:2379 --log_level debug --listen :8080 --xff
 ```
 
 ## Put data
