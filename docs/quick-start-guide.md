@@ -7,7 +7,7 @@ Before we begin be sure to [download and install metad](installation.md).
 metad supports the following backends:
 
 * local  memory store,just for test
-* etcd || etcdv3 etcd v3 api
+* etcd v3 api
 
 The following example we use etcd v3 as a backend
 

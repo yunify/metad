@@ -1,5 +1,5 @@
 # Backend type
-backend: etcd
+backend: etcdv3
 # Set log level: debug|info|warning
 log_level: debug
 pid_file: /var/run/metad.pid

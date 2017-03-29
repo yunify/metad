@@ -8,7 +8,7 @@ Configuration option and command line flags table
 | ------------------------------|:-----------------| :--------------|--------------|
 |                               | --version        | false          |Show metad version|
 |                               | --config         |                |The configuration file path|
-| backend                       | --backend        | etcdv3         |The metad backend type|
+| backend                       | --backend        | local          |The metad backend type|
 | nodes                         | --nodes          |                |List of backend nodes|
 | log_level                     | --log_level      | info           |Log level for metad print out: debug\|info\|warning |
 | pid_file                      | --pid_file       |                |PID to write to|
