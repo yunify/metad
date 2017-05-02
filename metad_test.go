@@ -3,14 +3,15 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/stretchr/testify/assert"
-	"github.com/yunify/metad/log"
-	"github.com/yunify/metad/util"
 	"net/http/httptest"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/yunify/metad/log"
+	"github.com/yunify/metad/util"
 )
 
 var (
@@ -62,8 +63,22 @@ func TestMetad(t *testing.T) {
 	data := make(map[string]interface{})
 	json.Unmarshal([]byte(dataJson), &data)
 
-	req := httptest.NewRequest("PUT", "/v1/data/", strings.NewReader(dataJson))
+	req := httptest.NewRequest("GET", "/metrics", strings.NewReader(dataJson))
 	w := httptest.NewRecorder()
+	metad.manageRouter.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
+
+	time.Sleep(sleepTime)
+
+	req = httptest.NewRequest("GET", "/health", strings.NewReader(dataJson))
+	w = httptest.NewRecorder()
+	metad.manageRouter.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
+
+	time.Sleep(sleepTime)
+
+	req = httptest.NewRequest("PUT", "/v1/data/", strings.NewReader(dataJson))
+	w = httptest.NewRecorder()
 	metad.manageRouter.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
 

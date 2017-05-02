@@ -20,17 +20,20 @@ func TestClientSyncStop(t *testing.T) {
 	prefix := fmt.Sprintf("/prefix%v", rand.Intn(1000))
 
 	stopChan := make(chan bool)
-
+	log.Info("prefix is %s",prefix)
 	nodes := []string{"http://127.0.0.1:2379"}
 	storeClient, err := NewEtcdClient("default", prefix, nodes, "", "", "", false, "", "")
 	assert.NoError(t, err)
-
 	go func() {
-		time.Sleep(3000 * time.Millisecond)
+		time.Sleep(3 * time.Second)
 		stopChan <- true
 	}()
 
 	metastore := store.New()
 	// expect internalSync not block after stopChan has signal
-	storeClient.internalSync(prefix, metastore, stopChan)
+	startedChan := make(chan bool)
+	storeClient.internalSync(prefix, metastore, stopChan, startedChan)
+	initialized:=<-startedChan
+	log.Info(fmt.Sprint("sync status:",initialized))
+
 }

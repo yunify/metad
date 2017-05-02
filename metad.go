@@ -5,14 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/golang/gddo/httputil"
-	"github.com/gorilla/mux"
-	"github.com/yunify/metad/atomic"
-	"github.com/yunify/metad/backends"
-	"github.com/yunify/metad/log"
-	"github.com/yunify/metad/metadata"
-	"github.com/yunify/metad/util/flatmap"
-	yaml "gopkg.in/yaml.v2"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -23,6 +15,16 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/golang/gddo/httputil"
+	"github.com/gorilla/mux"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/yunify/metad/atomic"
+	"github.com/yunify/metad/backends"
+	"github.com/yunify/metad/log"
+	"github.com/yunify/metad/metadata"
+	"github.com/yunify/metad/util/flatmap"
+	yaml "gopkg.in/yaml.v2"
 )
 
 const (
@@ -107,6 +109,13 @@ func (m *Metad) initRouter() {
 
 func (m *Metad) initManageRouter() {
 	m.manageRouter.HandleFunc("/favicon.ico", http.NotFound)
+	m.manageRouter.Handle("/metrics", promhttp.Handler())
+	m.manageRouter.HandleFunc("/health", func(arg1 http.ResponseWriter, arg2 *http.Request) {
+		status := make(map[string]string)
+		status["status"] = "up"
+		result, _ := json.Marshal(status)
+		arg1.Write(result)
+	})
 
 	v1 := m.manageRouter.PathPrefix("/v1").Subrouter()
 

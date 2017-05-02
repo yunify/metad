@@ -104,7 +104,9 @@ func (c *Client) Delete(nodePath string, dir bool) error {
 }
 
 func (c *Client) Sync(store store.Store, stopChan chan bool) {
-	go c.internalSync(c.prefix, store, stopChan)
+	startedChan := make(chan bool)
+	go c.internalSync(c.prefix, store, stopChan,startedChan)
+	<-startedChan
 }
 
 func (c *Client) GetMapping(nodePath string, dir bool) (interface{}, error) {
@@ -130,7 +132,9 @@ func (c *Client) DeleteMapping(nodePath string, dir bool) error {
 }
 
 func (c *Client) SyncMapping(mapping store.Store, stopChan chan bool) {
-	go c.internalSync(c.mappingPrefix, mapping, stopChan)
+	startedChan := make(chan bool)
+	go c.internalSync(c.mappingPrefix, mapping, stopChan,startedChan)
+	<-startedChan
 }
 
 func (c *Client) internalGets(prefix, nodePath string) (map[string]string, error) {
@@ -178,7 +182,7 @@ func handleGetResp(prefix string, resp *client.GetResponse, vars map[string]stri
 	return nil
 }
 
-func (c *Client) internalSync(prefix string, store store.Store, stopChan chan bool) {
+func (c *Client) internalSync(prefix string, store store.Store, stopChan chan bool, startedChan chan bool) {
 
 	var rev int64 = 0
 	init := false
@@ -215,6 +219,9 @@ func (c *Client) internalSync(prefix string, store store.Store, stopChan chan bo
 			store.PutBulk("/", val)
 			log.Info("Init store for prefix %s success.", prefix)
 			init = true
+			go func() {
+				startedChan <- true
+			}()
 		}
 		for resp := range watchChan {
 			processSyncChange(prefix, store, &resp)
