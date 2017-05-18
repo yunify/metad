@@ -1,6 +1,7 @@
 package backends
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"github.com/stretchr/testify/assert"
@@ -22,6 +23,11 @@ var (
 func init() {
 	log.SetLevel("debug")
 	rand.Seed(int64(time.Now().Nanosecond()))
+}
+
+func newDefaultContext() context.Context {
+	ctx := context.Background()
+	return ctx
 }
 
 func TestClientGetPut(t *testing.T) {
@@ -223,6 +229,7 @@ func TestClientPutJSON(t *testing.T) {
 func TestClientNoPrefix(t *testing.T) {
 	for _, backend := range backendNodes {
 		println("Test backend: ", backend)
+		ctx := newDefaultContext()
 
 		prefix := ""
 
@@ -274,7 +281,7 @@ func TestClientNoPrefix(t *testing.T) {
 		time.Sleep(1000 * time.Millisecond)
 
 		// mapping data should not sync to metadata
-		_, val = metastore.Get("/_metad")
+		_, val = metastore.Get(ctx, "/_metad")
 		assert.Nil(t, val)
 
 		assert.NoError(t, storeClient.Delete("/", true))
@@ -299,6 +306,7 @@ func TestClientSync(t *testing.T) {
 
 	for _, backend := range backendNodes {
 		println("Test backend: ", backend)
+		ctx := newDefaultContext()
 
 		prefix := fmt.Sprintf("/prefix%v", rand.Intn(1000))
 
@@ -325,17 +333,17 @@ func TestClientSync(t *testing.T) {
 
 		testData := FillTestData(storeClient)
 		time.Sleep(2000 * time.Millisecond)
-		ValidTestData(t, testData, metastore, backend)
+		ValidTestData(ctx, t, testData, metastore, backend)
 
 		RandomUpdate(testData, storeClient, 10)
 		time.Sleep(1000 * time.Millisecond)
-		ValidTestData(t, testData, metastore, backend)
+		ValidTestData(ctx, t, testData, metastore, backend)
 
 		deletedKey := RandomDelete(testData, storeClient)
 		time.Sleep(1000 * time.Millisecond)
-		ValidTestData(t, testData, metastore, backend)
+		ValidTestData(ctx, t, testData, metastore, backend)
 
-		_, val := metastore.Get(deletedKey)
+		_, val := metastore.Get(ctx, deletedKey)
 		assert.Nil(t, val)
 
 		storeClient.Delete("/", true)
@@ -389,6 +397,8 @@ func TestMapping(t *testing.T) {
 func TestMappingSync(t *testing.T) {
 
 	for _, backend := range backendNodes {
+		ctx := newDefaultContext()
+
 		prefix := fmt.Sprintf("/prefix%v", rand.Intn(1000))
 		group := fmt.Sprintf("/group%v", rand.Intn(1000))
 		println("Test backend: ", backend)
@@ -425,7 +435,7 @@ func TestMappingSync(t *testing.T) {
 
 		for i := 0; i < 5; i++ {
 			ip := fmt.Sprintf("192.168.1.%v", i)
-			_, val := mappingstore.Get(ip)
+			_, val := mappingstore.Get(ctx, ip)
 			mapVal, mok := val.(map[string]interface{})
 			assert.True(t, mok)
 			path := mapVal["instance"]
@@ -444,7 +454,7 @@ func TestMappingSync(t *testing.T) {
 
 		for i := 5; i < 10; i++ {
 			ip := fmt.Sprintf("192.168.1.%v", i)
-			_, val := mappingstore.Get(ip)
+			_, val := mappingstore.Get(ctx, ip)
 			mapVal, mok := val.(map[string]interface{})
 			assert.True(t, mok)
 			path := mapVal["instance"]
@@ -454,7 +464,7 @@ func TestMappingSync(t *testing.T) {
 		nodePath := ip + "/" + "instance"
 		storeClient.PutMapping(nodePath, "/instances/new1", true)
 		time.Sleep(1000 * time.Millisecond)
-		_, val := mappingstore.Get(nodePath)
+		_, val := mappingstore.Get(ctx, nodePath)
 		assert.Equal(t, "/instances/new1", val)
 		storeClient.Delete("/", true)
 		storeClient.DeleteMapping("/", true)
@@ -506,9 +516,9 @@ func RandomDelete(testData map[string]string, storeClient StoreClient) string {
 	return key
 }
 
-func ValidTestData(t *testing.T, testData map[string]string, metastore store.Store, backend string) {
+func ValidTestData(ctx context.Context, t *testing.T, testData map[string]string, metastore store.Store, backend string) {
 	for k, v := range testData {
-		_, storeVal := metastore.Get(k)
+		_, storeVal := metastore.Get(ctx, k)
 		assert.Equal(t, v, storeVal, "valid data fail for backend %s", backend)
 	}
 }

@@ -1,6 +1,7 @@
 package store
 
 import (
+	"context"
 	"fmt"
 	"github.com/yunify/metad/atomic"
 	"github.com/yunify/metad/util"
@@ -17,15 +18,15 @@ type Store interface {
 	// currentVersion int64 and
 	// a string (nodePath is a leaf node) or
 	// a map[string]interface{} (nodePath is dir)
-	Get(nodePath string) (int64, interface{})
+	Get(ctx context.Context, nodePath string) (int64, interface{})
 	// Put value can be a map[string]interface{} or string
-	Put(nodePath string, value interface{})
-	Delete(nodePath string)
+	Put(ctx context.Context, nodePath string, value interface{})
+	Delete(ctx context.Context, nodePath string)
 	// PutBulk value should be a flatmap
-	PutBulk(nodePath string, value map[string]string)
-	Watch(nodePath string, buf int) Watcher
+	PutBulk(ctx context.Context, nodePath string, value map[string]string)
+	Watch(ctx context.Context, nodePath string, buf int) Watcher
 	// Clean clean the nodePath's node
-	Clean(nodePath string)
+	Clean(ctx context.Context, nodePath string)
 	// Json output store as json
 	Json() string
 	// Version return store's current version
@@ -72,7 +73,7 @@ func newStore() *store {
 }
 
 // Get returns a path value.
-func (s *store) Get(nodePath string) (currentVersion int64, val interface{}) {
+func (s *store) Get(ctx context.Context, nodePath string) (currentVersion int64, val interface{}) {
 
 	s.worldLock.RLock()
 	defer s.worldLock.RUnlock()
@@ -83,7 +84,7 @@ func (s *store) Get(nodePath string) (currentVersion int64, val interface{}) {
 
 	n := s.internalGet(nodePath)
 	if n != nil {
-		val = n.GetValue()
+		val = n.GetValue(ctx)
 		m, mok := val.(map[string]interface{})
 		// treat empty dir as not found result.
 		if mok && len(m) == 0 && !n.IsRoot() {
@@ -94,7 +95,7 @@ func (s *store) Get(nodePath string) (currentVersion int64, val interface{}) {
 }
 
 // Put creates or update the node at nodePath, value should a map[string]interface{} or a string
-func (s *store) Put(nodePath string, value interface{}) {
+func (s *store) Put(ctx context.Context, nodePath string, value interface{}) {
 	nodePath = path.Clean(path.Join("/", nodePath))
 
 	s.worldLock.Lock()
@@ -110,14 +111,14 @@ func (s *store) Put(nodePath string, value interface{}) {
 	}
 }
 
-func (s *store) PutBulk(nodePath string, values map[string]string) {
+func (s *store) PutBulk(ctx context.Context, nodePath string, values map[string]string) {
 	s.worldLock.Lock()
 	defer s.worldLock.Unlock()
 	s.internalPutBulk(nodePath, values)
 }
 
 // Delete deletes the node at the given path.
-func (s *store) Delete(nodePath string) {
+func (s *store) Delete(ctx context.Context, nodePath string) {
 
 	s.worldLock.Lock()
 	defer s.worldLock.Unlock()
@@ -133,7 +134,7 @@ func (s *store) Delete(nodePath string) {
 	n.Remove()
 }
 
-func (s *store) Watch(nodePath string, buf int) Watcher {
+func (s *store) Watch(ctx context.Context, nodePath string, buf int) Watcher {
 	s.worldLock.Lock()
 	defer s.worldLock.Unlock()
 	var n *node
@@ -151,7 +152,7 @@ func (s *store) Watch(nodePath string, buf int) Watcher {
 			n = newDir(s, nodeName, d)
 		}
 	}
-	return n.Watch(buf)
+	return n.Watch(ctx, buf)
 }
 
 func (s *store) Json() string {
@@ -162,7 +163,7 @@ func (s *store) Version() int64 {
 	return s.version.Get()
 }
 
-func (s *store) Clean(nodePath string) {
+func (s *store) Clean(ctx context.Context, nodePath string) {
 	select {
 	case s.cleanChan <- nodePath:
 	default:

@@ -2,6 +2,7 @@ package store
 
 import (
 	"container/list"
+	"context"
 	"encoding/json"
 	"errors"
 	"path"
@@ -239,7 +240,7 @@ func (n *node) Clean() bool {
 }
 
 // Return node value, if node is dir, will return a map contains children's value, otherwise return n.Value
-func (n *node) GetValue() interface{} {
+func (n *node) GetValue(ctx context.Context) interface{} {
 	if n.IsDir() {
 		values := make(map[string]interface{})
 		for k, node := range n.Children {
@@ -247,7 +248,7 @@ func (n *node) GetValue() interface{} {
 			if node.IsHidden() {
 				continue
 			}
-			v := node.GetValue()
+			v := node.GetValue(ctx)
 			m, isMap := v.(map[string]interface{})
 			// skip empty dir.
 			if isMap && len(m) == 0 {
@@ -290,7 +291,7 @@ func (n *node) Notify(action string) {
 	n.internalNotify(action, n)
 }
 
-func (n *node) Watch(bufLen int) Watcher {
+func (n *node) Watch(ctx context.Context, bufLen int) Watcher {
 	n.watcherLock.Lock()
 	defer n.watcherLock.Unlock()
 
@@ -307,7 +308,7 @@ func (n *node) Watch(bufLen int) Watcher {
 		w.removed = true
 		n.watchers.Remove(elem)
 		if n.watchers.Len() == 0 {
-			n.store.Clean(n.Path())
+			n.store.Clean(ctx, n.Path())
 		}
 	}
 

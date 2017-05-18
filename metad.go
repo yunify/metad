@@ -180,7 +180,7 @@ func (m *Metad) dataGet(ctx context.Context, req *http.Request) (interface{}, *H
 	if nodePath == "" {
 		nodePath = "/"
 	}
-	val := m.metadataRepo.GetData(nodePath)
+	val := m.metadataRepo.GetData(ctx, nodePath)
 	if val == nil {
 		return nil, NewHttpError(http.StatusNotFound, "Not found")
 	} else {
@@ -203,7 +203,7 @@ func (m *Metad) dataUpdate(ctx context.Context, req *http.Request) (interface{},
 		// POST means replace old value
 		// PUT means merge to old value
 		replace := "POST" == strings.ToUpper(req.Method)
-		err = m.metadataRepo.PutData(nodePath, data, replace)
+		err = m.metadataRepo.PutData(ctx,nodePath, data, replace)
 		if err != nil {
 			if log.IsDebugEnable() {
 				log.Debug("dataUpdate  nodePath:%s, data:%v, error:%s", nodePath, data, err.Error())
@@ -226,7 +226,7 @@ func (m *Metad) dataDelete(ctx context.Context, req *http.Request) (interface{},
 	if subsParam != "" {
 		subs = strings.Split(subsParam, ",")
 	}
-	err := m.metadataRepo.DeleteData(nodePath, subs...)
+	err := m.metadataRepo.DeleteData(ctx, nodePath, subs...)
 	if err != nil {
 		return nil, NewServerError(err)
 	} else {
@@ -240,7 +240,7 @@ func (m *Metad) mappingGet(ctx context.Context, req *http.Request) (interface{},
 	if nodePath == "" {
 		nodePath = "/"
 	}
-	val := m.metadataRepo.GetMapping(nodePath)
+	val := m.metadataRepo.GetMapping(ctx, nodePath)
 	if val == nil {
 		return nil, NewHttpError(http.StatusNotFound, "Not found")
 	} else {
@@ -268,7 +268,7 @@ func (m *Metad) mappingUpdate(ctx context.Context, req *http.Request) (interface
 		// POST means replace old value
 		// PUT means merge to old value
 		replace := "POST" == strings.ToUpper(req.Method)
-		err = m.metadataRepo.PutMapping(nodePath, data, replace)
+		err = m.metadataRepo.PutMapping(ctx, nodePath, data, replace)
 		if err != nil {
 			if log.IsDebugEnable() {
 				log.Debug("mappingUpdate  nodePath:%s, data:%v, error:%s", nodePath, data, err.Error())
@@ -291,7 +291,7 @@ func (m *Metad) mappingDelete(ctx context.Context, req *http.Request) (interface
 	if subsParam != "" {
 		subs = strings.Split(subsParam, ",")
 	}
-	err := m.metadataRepo.DeleteMapping(nodePath, subs...)
+	err := m.metadataRepo.DeleteMapping(ctx, nodePath, subs...)
 	if err != nil {
 		return nil, NewServerError(err)
 	} else {
@@ -337,14 +337,14 @@ func (m *Metad) rootHandler(ctx context.Context, req *http.Request) (currentVers
 			}
 		}
 		if prevVersion > 0 && prevVersion != m.metadataRepo.DataVersion() {
-			currentVersion, result = m.metadataRepo.Root(clientIP, nodePath)
+			currentVersion, result = m.metadataRepo.Root(ctx, clientIP, nodePath)
 		} else {
 			m.metadataRepo.Watch(ctx, clientIP, nodePath)
 			// directly return new result to client ,not change, for keep same as request with prev_version
-			currentVersion, result = m.metadataRepo.Root(clientIP, nodePath)
+			currentVersion, result = m.metadataRepo.Root(ctx, clientIP, nodePath)
 		}
 	} else {
-		currentVersion, result = m.metadataRepo.Root(clientIP, nodePath)
+		currentVersion, result = m.metadataRepo.Root(ctx, clientIP, nodePath)
 	}
 	if result == nil {
 		httpErr = NewHttpError(http.StatusNotFound, "Not found")
@@ -375,14 +375,14 @@ func (m *Metad) selfHandler(ctx context.Context, req *http.Request) (currentVers
 		// if prevVersion < currentVersion, client lost change, so return immediately.
 		// if prevVersion > currentVersion, may be metad reboot and recount version, so return immediately, let client use new version.
 		if prevVersion > 0 && prevVersion != currentVersion {
-			result = m.metadataRepo.Self(clientIP, nodePath)
+			result = m.metadataRepo.Self(ctx, clientIP, nodePath)
 		} else {
 			m.metadataRepo.WatchSelf(ctx, clientIP, nodePath)
 			// directly return new result to client ,not change, for pre_version.
-			result = m.metadataRepo.Self(clientIP, nodePath)
+			result = m.metadataRepo.Self(ctx, clientIP, nodePath)
 		}
 	} else {
-		result = m.metadataRepo.Self(clientIP, nodePath)
+		result = m.metadataRepo.Self(ctx, clientIP, nodePath)
 	}
 	if result == nil {
 		httpErr = NewHttpError(http.StatusNotFound, "Not found")

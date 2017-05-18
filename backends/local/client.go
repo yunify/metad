@@ -1,6 +1,7 @@
 package local
 
 import (
+	"context"
 	"github.com/yunify/metad/log"
 	"github.com/yunify/metad/store"
 )
@@ -18,9 +19,15 @@ func NewLocalClient() (*Client, error) {
 	}, nil
 }
 
+func newDefaultContext() context.Context {
+	ctx := context.Background()
+	return ctx
+}
+
 // Get queries etcd for nodePath.
 func (c *Client) Get(nodePath string, dir bool) (interface{}, error) {
-	_, r := c.data.Get(nodePath)
+	ctx := newDefaultContext()
+	_, r := c.data.Get(ctx, nodePath)
 	if r != nil {
 		return r, nil
 	} else {
@@ -33,15 +40,17 @@ func (c *Client) Get(nodePath string, dir bool) (interface{}, error) {
 }
 
 func (c *Client) Put(nodePath string, value interface{}, replace bool) error {
+	ctx := newDefaultContext()
 	if replace {
-		c.data.Delete(nodePath)
+		c.data.Delete(ctx, nodePath)
 	}
-	c.data.Put(nodePath, value)
+	c.data.Put(ctx, nodePath, value)
 	return nil
 }
 
 func (c *Client) Delete(nodePath string, dir bool) error {
-	c.data.Delete(nodePath)
+	ctx := newDefaultContext()
+	c.data.Delete(ctx, nodePath)
 	return nil
 }
 
@@ -50,7 +59,8 @@ func (c *Client) Sync(s store.Store, stopChan chan bool) {
 }
 
 func (c *Client) GetMapping(nodePath string, dir bool) (interface{}, error) {
-	_, r := c.mapping.Get(nodePath)
+	ctx := newDefaultContext()
+	_, r := c.mapping.Get(ctx, nodePath)
 	if r != nil {
 		return r, nil
 	} else {
@@ -63,15 +73,17 @@ func (c *Client) GetMapping(nodePath string, dir bool) (interface{}, error) {
 }
 
 func (c *Client) PutMapping(nodePath string, mapping interface{}, replace bool) error {
+	ctx := newDefaultContext()
 	if replace {
-		c.mapping.Delete(nodePath)
+		c.mapping.Delete(ctx, nodePath)
 	}
-	c.mapping.Put(nodePath, mapping)
+	c.mapping.Put(ctx, nodePath, mapping)
 	return nil
 }
 
 func (c *Client) DeleteMapping(nodePath string, dir bool) error {
-	c.mapping.Delete(nodePath)
+	ctx := newDefaultContext()
+	c.mapping.Delete(ctx, nodePath)
 	return nil
 }
 
@@ -80,10 +92,11 @@ func (c *Client) SyncMapping(mapping store.Store, stopChan chan bool) {
 }
 
 func (c *Client) internalSync(name string, from store.Store, to store.Store, stopChan chan bool) {
-	w := from.Watch("/", 5000)
-	_, meta := from.Get("/")
+	ctx := newDefaultContext()
+	w := from.Watch(ctx, "/", 5000)
+	_, meta := from.Get(ctx, "/")
 	if meta != nil {
-		to.Put("/", meta)
+		to.Put(ctx, "/", meta)
 	}
 	for {
 		select {
@@ -94,9 +107,9 @@ func (c *Client) internalSync(name string, from store.Store, to store.Store, sto
 			log.Debug("processEvent %s %s %s", e.Action, e.Path, e.Value)
 			switch e.Action {
 			case store.Delete:
-				to.Delete(e.Path)
+				to.Delete(ctx, e.Path)
 			case store.Update:
-				to.Put(e.Path, e.Value)
+				to.Put(ctx, e.Path, e.Value)
 			}
 		case <-stopChan:
 			log.Info("Stop sync %s", name)

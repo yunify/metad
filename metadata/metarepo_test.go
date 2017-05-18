@@ -24,8 +24,13 @@ var (
 	sleepTime = 200 * time.Millisecond
 )
 
-func TestMetarepoData(t *testing.T) {
+func newDefaultCtx() context.Context {
+	ctx := context.Background()
+	return ctx
+}
 
+func TestMetarepoData(t *testing.T) {
+	ctx := newDefaultCtx()
 	prefix := fmt.Sprintf("/prefix%v", rand.Intn(1000))
 
 	nodes := backends.GetDefaultBackends(backend)
@@ -39,15 +44,15 @@ func TestMetarepoData(t *testing.T) {
 	assert.NoError(t, err)
 
 	metarepo := New(false, storeClient)
-	metarepo.DeleteData("/")
+	metarepo.DeleteData(ctx, "/")
 
 	metarepo.StartSync()
 
 	testData := FillTestData(metarepo)
 	time.Sleep(sleepTime)
-	ValidTestData(t, testData, metarepo.data)
+	ValidTestData(ctx, t, testData, metarepo.data)
 
-	_, val := metarepo.Root("192.168.0.1", "/nodes/0")
+	_, val := metarepo.Root(ctx, "192.168.0.1", "/nodes/0")
 	assert.NotNil(t, val)
 
 	mapVal, mok := val.(map[string]interface{})
@@ -56,31 +61,32 @@ func TestMetarepoData(t *testing.T) {
 	_, mok = mapVal["name"]
 	assert.True(t, mok)
 
-	metarepo.DeleteData("/nodes/0")
+	metarepo.DeleteData(ctx, "/nodes/0")
 
 	time.Sleep(sleepTime)
-	val = metarepo.GetData("/nodes/0")
+	val = metarepo.GetData(ctx, "/nodes/0")
 	assert.Nil(t, val)
 
 	subs := []string{"1", "3", "noexistkey"}
 	//test batch delete
-	err = metarepo.DeleteData("nodes", subs...)
+	err = metarepo.DeleteData(ctx, "nodes", subs...)
 	time.Sleep(sleepTime)
 	assert.NoError(t, err)
 
 	for _, sub := range subs {
-		val = metarepo.GetData("/nodes/" + sub)
+		val = metarepo.GetData(ctx, "/nodes/"+sub)
 		assert.Nil(t, val)
 	}
 
-	val = metarepo.GetData("/nodes/2")
+	val = metarepo.GetData(ctx, "/nodes/2")
 	assert.NotNil(t, val)
 
-	metarepo.DeleteData("/")
+	metarepo.DeleteData(ctx, "/")
 	metarepo.StopSync()
 }
 
 func TestMetarepoMapping(t *testing.T) {
+	ctx := newDefaultCtx()
 
 	prefix := fmt.Sprintf("/prefix%v", rand.Intn(1000))
 	group := fmt.Sprintf("/group%v", rand.Intn(1000))
@@ -96,8 +102,8 @@ func TestMetarepoMapping(t *testing.T) {
 	assert.NoError(t, err)
 
 	metarepo := New(false, storeClient)
-	metarepo.DeleteData("/")
-	metarepo.DeleteMapping("/")
+	metarepo.DeleteData(ctx, "/")
+	metarepo.DeleteMapping(ctx, "/")
 
 	metarepo.StartSync()
 
@@ -112,28 +118,28 @@ func TestMetarepoMapping(t *testing.T) {
 		mappings[ip] = mapping
 	}
 	// batch update
-	err = metarepo.PutMapping("/", mappings, true)
+	err = metarepo.PutMapping(ctx, "/", mappings, true)
 	assert.NoError(t, err)
 	time.Sleep(sleepTime)
 
-	metarepo.DeleteMapping("/192.168.1.0")
+	metarepo.DeleteMapping(ctx, "/192.168.1.0")
 
 	time.Sleep(sleepTime)
-	val := metarepo.GetMapping("/192.168.1.0")
+	val := metarepo.GetMapping(ctx, "/192.168.1.0")
 	assert.Nil(t, val)
 
 	subs := []string{"192.168.1.1", "192.168.1.3", "noexistkey"}
 	//test batch delete
-	err = metarepo.DeleteMapping("/", subs...)
+	err = metarepo.DeleteMapping(ctx, "/", subs...)
 	time.Sleep(sleepTime)
 	assert.NoError(t, err)
 
 	for _, sub := range subs {
-		val = metarepo.GetMapping("/" + sub)
+		val = metarepo.GetMapping(ctx, "/"+sub)
 		assert.Nil(t, val)
 	}
 
-	val = metarepo.GetMapping("/192.168.1.2")
+	val = metarepo.GetMapping(ctx, "/192.168.1.2")
 	assert.NotNil(t, val)
 
 	p := 4
@@ -145,7 +151,7 @@ func TestMetarepoMapping(t *testing.T) {
 	}
 
 	// test update replace(false)
-	err = metarepo.PutMapping(ip, map[string]interface{}{"node2": "/nodes/2"}, false)
+	err = metarepo.PutMapping(ctx, ip, map[string]interface{}{"node2": "/nodes/2"}, false)
 	assert.NoError(t, err)
 
 	expectMapping1 := map[string]interface{}{
@@ -154,11 +160,11 @@ func TestMetarepoMapping(t *testing.T) {
 		"node2": "/nodes/2",
 	}
 	time.Sleep(sleepTime)
-	mapping := metarepo.GetMapping(fmt.Sprintf("/%s", ip))
+	mapping := metarepo.GetMapping(ctx, fmt.Sprintf("/%s", ip))
 	assert.Equal(t, expectMapping1, mapping)
 
 	// test update key
-	err = metarepo.PutMapping(ip+"/node3", "/nodes/3", false)
+	err = metarepo.PutMapping(ctx, ip+"/node3", "/nodes/3", false)
 	assert.NoError(t, err)
 
 	expectMapping2 := map[string]interface{}{
@@ -168,28 +174,29 @@ func TestMetarepoMapping(t *testing.T) {
 		"node3": "/nodes/3",
 	}
 	time.Sleep(sleepTime)
-	mapping = metarepo.GetMapping(fmt.Sprintf("/%s", ip))
+	mapping = metarepo.GetMapping(ctx, fmt.Sprintf("/%s", ip))
 	assert.Equal(t, expectMapping2, mapping)
 
 	// test delete mapping
-	metarepo.DeleteMapping(ip + "/node3")
+	metarepo.DeleteMapping(ctx, ip+"/node3")
 	time.Sleep(sleepTime)
-	mapping = metarepo.GetMapping(fmt.Sprintf("/%s", ip))
+	mapping = metarepo.GetMapping(ctx, fmt.Sprintf("/%s", ip))
 	assert.Equal(t, expectMapping1, mapping)
 
 	// test update replace(true)
-	err = metarepo.PutMapping(ip, expectMapping0, true)
+	err = metarepo.PutMapping(ctx, ip, expectMapping0, true)
 	assert.NoError(t, err)
 	time.Sleep(sleepTime)
-	mapping = metarepo.GetMapping(fmt.Sprintf("/%s", ip))
+	mapping = metarepo.GetMapping(ctx, fmt.Sprintf("/%s", ip))
 	assert.Equal(t, expectMapping0, mapping)
 
-	metarepo.DeleteData("/")
-	metarepo.DeleteMapping("/")
+	metarepo.DeleteData(ctx, "/")
+	metarepo.DeleteMapping(ctx, "/")
 	metarepo.StopSync()
 }
 
 func TestMetarepoSelf(t *testing.T) {
+	ctx := newDefaultCtx()
 	prefix := fmt.Sprintf("/prefix%v", rand.Intn(1000))
 	group := fmt.Sprintf("/group%v", rand.Intn(1000))
 	nodes := backends.GetDefaultBackends(backend)
@@ -205,14 +212,14 @@ func TestMetarepoSelf(t *testing.T) {
 
 	metarepo := New(false, storeClient)
 
-	metarepo.DeleteMapping("/")
-	metarepo.DeleteData("/")
+	metarepo.DeleteMapping(ctx, "/")
+	metarepo.DeleteData(ctx, "/")
 
 	metarepo.StartSync()
 
 	testData := FillTestData(metarepo)
 	time.Sleep(sleepTime)
-	ValidTestData(t, testData, metarepo.data)
+	ValidTestData(ctx, t, testData, metarepo.data)
 
 	key := "node"
 	mappings := make(map[string]interface{})
@@ -225,12 +232,12 @@ func TestMetarepoSelf(t *testing.T) {
 		mappings[ip] = mapping
 	}
 	// batch update
-	err = metarepo.PutMapping("/", mappings, true)
+	err = metarepo.PutMapping(ctx, "/", mappings, true)
 	assert.NoError(t, err)
 	time.Sleep(sleepTime)
 
 	//test mapping get
-	mappings2 := metarepo.GetMapping("/")
+	mappings2 := metarepo.GetMapping(ctx, "/")
 	assert.Equal(t, mappings, mappings2)
 
 	// test GetSelf
@@ -238,27 +245,27 @@ func TestMetarepoSelf(t *testing.T) {
 	p := rand.Intn(maxNode)
 	ip := fmt.Sprintf("192.168.1.%v", p)
 
-	val := metarepo.Self(ip, "/")
+	val := metarepo.Self(ctx, ip, "/")
 	mapVal, mok := val.(map[string]interface{})
 
 	assert.True(t, mok)
 	assert.NotNil(t, mapVal[key])
 
-	val = metarepo.Self(ip, "/node/name")
+	val = metarepo.Self(ctx, ip, "/node/name")
 	assert.Equal(t, fmt.Sprintf("node%v", p), val)
 
 	//test date delete
-	metarepo.DeleteData(fmt.Sprintf("/nodes/%v/name", p))
+	metarepo.DeleteData(ctx, fmt.Sprintf("/nodes/%v/name", p))
 
 	time.Sleep(sleepTime)
-	val = metarepo.Self(ip, "/node/name")
+	val = metarepo.Self(ctx, ip, "/node/name")
 	assert.Nil(t, val)
 
-	metarepo.PutData(fmt.Sprintf("/nodes/%v/name", p), fmt.Sprintf("node%v", p), true)
+	metarepo.PutData(ctx, fmt.Sprintf("/nodes/%v/name", p), fmt.Sprintf("node%v", p), true)
 
 	//test mapping dir
 
-	err = metarepo.PutMapping(ip, map[string]interface{}{
+	err = metarepo.PutMapping(ctx, ip, map[string]interface{}{
 		"dir": map[string]interface{}{
 			"n1": "/nodes/1",
 			"n2": "/nodes/2",
@@ -267,19 +274,20 @@ func TestMetarepoSelf(t *testing.T) {
 	assert.NoError(t, err)
 
 	time.Sleep(sleepTime)
-	val = metarepo.Self(ip, "/dir/n1/name")
+	val = metarepo.Self(ctx, ip, "/dir/n1/name")
 	if val != "node1" {
 		log.Error("except node1, but get %s, ip: %s, data: %s, mapping:%s", val, ip, metarepo.data.Json(), metarepo.mapping.Json())
 		t.Fatal("except node1, but get", val)
 	}
 	assert.Equal(t, "node1", val)
 
-	metarepo.DeleteData("/")
-	metarepo.DeleteMapping("/")
+	metarepo.DeleteData(ctx, "/")
+	metarepo.DeleteMapping(ctx, "/")
 	metarepo.StopSync()
 }
 
 func TestMetarepoRoot(t *testing.T) {
+	ctx := newDefaultCtx()
 
 	prefix := fmt.Sprintf("/prefix%v", rand.Intn(1000))
 	group := fmt.Sprintf("/group%v", rand.Intn(1000))
@@ -296,8 +304,8 @@ func TestMetarepoRoot(t *testing.T) {
 
 	metarepo := New(false, storeClient)
 
-	metarepo.DeleteMapping("/")
-	metarepo.DeleteData("/")
+	metarepo.DeleteMapping(ctx, "/")
+	metarepo.DeleteData(ctx, "/")
 
 	FillTestData(metarepo)
 
@@ -307,11 +315,11 @@ func TestMetarepoRoot(t *testing.T) {
 	ip := "192.168.1.0"
 	mapping := make(map[string]interface{})
 	mapping["node"] = "/nodes/0"
-	err = metarepo.PutMapping(ip, mapping, true)
+	err = metarepo.PutMapping(ctx, ip, mapping, true)
 	assert.NoError(t, err)
 
 	time.Sleep(sleepTime)
-	_, val := metarepo.Root(ip, "/")
+	_, val := metarepo.Root(ctx, ip, "/")
 	mapVal, mok := val.(map[string]interface{})
 	assert.True(t, mok)
 	//println(fmt.Sprintf("%v", mapVal))
@@ -322,18 +330,20 @@ func TestMetarepoRoot(t *testing.T) {
 
 	metarepo.SetOnlySelf(true)
 
-	_, val = metarepo.Root(ip, "/")
+	_, val = metarepo.Root(ctx, ip, "/")
 	mapVal = val.(map[string]interface{})
 	selfVal = mapVal["self"]
 	assert.NotNil(t, selfVal)
 	assert.True(t, len(mapVal) == 1)
 
-	metarepo.DeleteData("/")
-	metarepo.DeleteMapping("/")
+	metarepo.DeleteData(ctx, "/")
+	metarepo.DeleteMapping(ctx, "/")
 	metarepo.StopSync()
 }
 
 func TestWatch(t *testing.T) {
+	ctx := newDefaultCtx()
+
 	prefix := fmt.Sprintf("/prefix%v", rand.Intn(1000))
 	group := fmt.Sprintf("/group%v", rand.Intn(1000))
 	nodes := backends.GetDefaultBackends(backend)
@@ -348,8 +358,8 @@ func TestWatch(t *testing.T) {
 	assert.NoError(t, err)
 
 	metarepo := New(false, storeClient)
-	metarepo.DeleteMapping("/")
-	metarepo.DeleteData("/")
+	metarepo.DeleteMapping(ctx, "/")
+	metarepo.DeleteData(ctx, "/")
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -393,7 +403,7 @@ func TestWatch(t *testing.T) {
 	}()
 	time.Sleep(sleepTime)
 
-	metarepo.PutData("/nodes/1/name", "n1", false)
+	metarepo.PutData(ctx, "/nodes/1/name", "n1", false)
 
 	select {
 	case result = <-ch:
@@ -407,6 +417,8 @@ func TestWatch(t *testing.T) {
 }
 
 func TestWatchSelf(t *testing.T) {
+	ctx := newDefaultCtx()
+
 	prefix := fmt.Sprintf("/prefix%v", rand.Intn(1000))
 	group := fmt.Sprintf("/group%v", rand.Intn(1000))
 	nodes := backends.GetDefaultBackends(backend)
@@ -421,15 +433,15 @@ func TestWatchSelf(t *testing.T) {
 	assert.NoError(t, err)
 
 	metarepo := New(false, storeClient)
-	metarepo.DeleteMapping("/")
-	metarepo.DeleteData("/")
+	metarepo.DeleteMapping(ctx, "/")
+	metarepo.DeleteData(ctx, "/")
 
 	FillTestData(metarepo)
 	metarepo.StartSync()
 
 	ip := "192.168.1.1"
 
-	err = metarepo.PutMapping(ip, map[string]interface{}{
+	err = metarepo.PutMapping(ctx, ip, map[string]interface{}{
 		"node": "/nodes/1",
 	}, true)
 	assert.NoError(t, err)
@@ -451,7 +463,7 @@ func TestWatchSelf(t *testing.T) {
 
 		name := fmt.Sprintf("n1_%v", i)
 		ip := fmt.Sprintf("192.168.1.%v", i)
-		err = metarepo.PutData("/nodes/1", map[string]interface{}{
+		err = metarepo.PutData(ctx, "/nodes/1", map[string]interface{}{
 			"name": name,
 			"ip":   ip,
 		}, false)
@@ -476,7 +488,7 @@ func TestWatchSelf(t *testing.T) {
 
 	time.Sleep(sleepTime)
 
-	err = metarepo.DeleteData("/nodes/1/name")
+	err = metarepo.DeleteData(ctx, "/nodes/1/name")
 	assert.NoError(t, err)
 
 	result := <-ch
@@ -491,6 +503,8 @@ func TestWatchSelf(t *testing.T) {
 }
 
 func TestWatchCloseChan(t *testing.T) {
+	ctx := newDefaultCtx()
+
 	prefix := fmt.Sprintf("/prefix%v", rand.Intn(1000))
 	group := fmt.Sprintf("/group%v", rand.Intn(1000))
 	nodes := backends.GetDefaultBackends(backend)
@@ -510,7 +524,7 @@ func TestWatchCloseChan(t *testing.T) {
 
 	ip := "192.168.1.1"
 
-	err = metarepo.PutMapping(ip, map[string]interface{}{
+	err = metarepo.PutMapping(ctx, ip, map[string]interface{}{
 		"node": "/nodes/1",
 	}, true)
 	assert.NoError(t, err)
@@ -547,6 +561,8 @@ func TestWatchCloseChan(t *testing.T) {
 // TestSelfWatchNodeNotExist
 // create a mapping with a node not exist, then update the node
 func TestSelfWatchNodeNotExist(t *testing.T) {
+	ctx := newDefaultCtx()
+
 	prefix := fmt.Sprintf("/prefix%v", rand.Intn(1000))
 	group := fmt.Sprintf("/group%v", rand.Intn(1000))
 	nodes := backends.GetDefaultBackends(backend)
@@ -568,7 +584,7 @@ func TestSelfWatchNodeNotExist(t *testing.T) {
 
 	ip := "192.168.1.1"
 
-	err = metarepo.PutMapping(ip, map[string]interface{}{
+	err = metarepo.PutMapping(ctx, ip, map[string]interface{}{
 		"host": "/hosts/i-local",
 		"cmd":  "/cmd/i-local",
 	}, true)
@@ -589,7 +605,7 @@ func TestSelfWatchNodeNotExist(t *testing.T) {
 
 	time.Sleep(sleepTime)
 
-	err = metarepo.PutData("/cmd/i-local", "start", true)
+	err = metarepo.PutData(ctx, "/cmd/i-local", "start", true)
 	assert.NoError(t, err)
 	result := <-ch
 	println(fmt.Sprintf("%s", result))
@@ -599,6 +615,8 @@ func TestSelfWatchNodeNotExist(t *testing.T) {
 }
 
 func FillTestData(metarepo *MetadataRepo) map[string]string {
+	ctx := newDefaultCtx()
+
 	nodes := make(map[string]interface{})
 	for i := 0; i < maxNode; i++ {
 		node := make(map[string]interface{})
@@ -609,7 +627,7 @@ func FillTestData(metarepo *MetadataRepo) map[string]string {
 	testData := map[string]interface{}{
 		"nodes": nodes,
 	}
-	err := metarepo.PutData("/", testData, true)
+	err := metarepo.PutData(ctx, "/", testData, true)
 	if err != nil {
 		log.Error("SetValues error", err.Error())
 		panic(err)
@@ -617,9 +635,9 @@ func FillTestData(metarepo *MetadataRepo) map[string]string {
 	return flatmap.Flatten(testData)
 }
 
-func ValidTestData(t *testing.T, testData map[string]string, metastore store.Store) {
+func ValidTestData(ctx context.Context, t *testing.T, testData map[string]string, metastore store.Store) {
 	for k, v := range testData {
-		_, storeVal := metastore.Get(k)
+		_, storeVal := metastore.Get(ctx, k)
 		assert.Equal(t, v, storeVal)
 	}
 }

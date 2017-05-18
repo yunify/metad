@@ -216,7 +216,7 @@ func (c *Client) internalSync(prefix string, store store.Store, stopChan chan bo
 				log.Info("Init store for prefix %s fail, retry.", prefix)
 				continue
 			}
-			store.PutBulk("/", val)
+			store.PutBulk(ctx,"/", val)
 			log.Info("Init store for prefix %s success.", prefix)
 			init = true
 			go func() {
@@ -224,13 +224,13 @@ func (c *Client) internalSync(prefix string, store store.Store, stopChan chan bo
 			}()
 		}
 		for resp := range watchChan {
-			processSyncChange(prefix, store, &resp)
+			processSyncChange(ctx, prefix, store, &resp)
 			rev = resp.Header.Revision
 		}
 	}
 }
 
-func processSyncChange(prefix string, store store.Store, resp *client.WatchResponse) {
+func processSyncChange(ctx context.Context, prefix string, store store.Store, resp *client.WatchResponse) {
 	for _, event := range resp.Events {
 		nodePath := string(event.Kv.Key)
 
@@ -244,12 +244,12 @@ func processSyncChange(prefix string, store store.Store, resp *client.WatchRespo
 		log.Debug("process sync change, event_type: %s, prefix: %v, nodePath:%v, value: %v ", event.Type, prefix, nodePath, value)
 		switch event.Type {
 		case mvccpb.PUT:
-			store.Put(nodePath, value)
+			store.Put(ctx, nodePath, value)
 		case mvccpb.DELETE:
-			store.Delete(nodePath)
+			store.Delete(ctx, nodePath)
 		default:
 			log.Warning("Unknow watch event type: %s ", event.Type)
-			store.Put(nodePath, value)
+			store.Put(ctx, nodePath, value)
 
 		}
 	}
