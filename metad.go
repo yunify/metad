@@ -203,7 +203,7 @@ func (m *Metad) dataUpdate(ctx context.Context, req *http.Request) (interface{},
 		// POST means replace old value
 		// PUT means merge to old value
 		replace := "POST" == strings.ToUpper(req.Method)
-		err = m.metadataRepo.PutData(ctx,nodePath, data, replace)
+		err = m.metadataRepo.PutData(ctx, nodePath, data, replace)
 		if err != nil {
 			if log.IsDebugEnable() {
 				log.Debug("dataUpdate  nodePath:%s, data:%v, error:%s", nodePath, data, err.Error())

@@ -224,7 +224,7 @@ func (r *MetadataRepo) getMappingData(ctx context.Context, nodePath, link string
 	return val
 }
 
-func (r *MetadataRepo) getMappingDatas(ctx context.Context,nodePath string, mapping map[string]interface{}) interface{} {
+func (r *MetadataRepo) getMappingDatas(ctx context.Context, nodePath string, mapping map[string]interface{}) interface{} {
 	nodePath = path.Join("/", nodePath)
 	paths := strings.Split(nodePath, "/")[1:] // trim first blank item
 	// nodePath is "/"
@@ -241,7 +241,7 @@ func (r *MetadataRepo) getMappingDatas(ctx context.Context,nodePath string, mapp
 				}
 			} else {
 				subNodePath := fmt.Sprintf("%v", v)
-				val := r.getMappingData(ctx,"/", subNodePath)
+				val := r.getMappingData(ctx, "/", subNodePath)
 				if val != nil {
 					meta[k] = val
 				} else {
