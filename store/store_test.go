@@ -232,7 +232,7 @@ func TestWatch(t *testing.T) {
 
 	s2 := s.(*store)
 	s2.worldLock.RLock()
-	n := s2.internalGet(ctx,"/nodes/6")
+	n := s2.internalGet(ctx, "/nodes/6")
 	s2.worldLock.RUnlock()
 	assert.NotNil(t, n)
 
@@ -241,12 +241,12 @@ func TestWatch(t *testing.T) {
 	//wait backend goroutine to clean
 	time.Sleep(5 * time.Second)
 	s2.worldLock.RLock()
-	n = s2.internalGet(ctx,"/nodes/6")
+	n = s2.internalGet(ctx, "/nodes/6")
 	s2.worldLock.RUnlock()
 	assert.Nil(t, n)
 
 	s2.worldLock.RLock()
-	n = s2.internalGet(ctx,"/nodes")
+	n = s2.internalGet(ctx, "/nodes")
 	s2.worldLock.RUnlock()
 	assert.Nil(t, n)
 
@@ -394,12 +394,12 @@ func TestStoreVisibility(t *testing.T) {
 	var secretVal interface{}
 
 	data := map[string]interface{}{
-		"data":map[string]interface{}{
-			"env?visibility=1":map[string]interface{}{
-				"name":"app1",
-				"secret?visibility=2":"123456",
+		"data": map[string]interface{}{
+			"env?visibility=1": map[string]interface{}{
+				"name":                "app1",
+				"secret?visibility=2": "123456",
 			},
-			"public_key":"public_key_val",
+			"public_key": "public_key_val",
 		},
 	}
 
@@ -439,10 +439,10 @@ func TestStoreVisibility(t *testing.T) {
 	envMap, mok = envVal.(map[string]interface{})
 	assert.True(t, mok)
 
-	nameVal,exist = envMap["name"]
+	nameVal, exist = envMap["name"]
 	assert.True(t, exist)
 	assert.Equal(t, "app1", nameVal)
-	secretVal,exist = envMap["secret"]
+	secretVal, exist = envMap["secret"]
 	assert.False(t, exist)
 
 	_, exist = mapVal["public_key"]
@@ -464,10 +464,10 @@ func TestStoreVisibility(t *testing.T) {
 	envMap, mok = envVal.(map[string]interface{})
 	assert.True(t, mok)
 
-	nameVal,exist = envMap["name"]
+	nameVal, exist = envMap["name"]
 	assert.True(t, exist)
 	assert.Equal(t, "app1", nameVal)
-	secretVal,exist = envMap["secret"]
+	secretVal, exist = envMap["secret"]
 	assert.True(t, exist)
 	assert.Equal(t, "123456", secretVal)
 

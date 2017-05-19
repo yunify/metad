@@ -220,7 +220,7 @@ func (s *store) internalPut(nodePath string, value string) *node {
 		return d
 	}
 
-	nodeName,vLevel := ParseVisibility(orgNodeName)
+	nodeName, vLevel := ParseVisibility(orgNodeName)
 
 	n := d.GetChild(nodeName)
 
@@ -288,7 +288,7 @@ func (s *store) checkDir(parent *node, orgDirName string) *node {
 	if orgDirName == "" {
 		return parent
 	}
-	dirName,vLevel := ParseVisibility(orgDirName)
+	dirName, vLevel := ParseVisibility(orgDirName)
 
 	node := parent.GetChild(dirName)
 

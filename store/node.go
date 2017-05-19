@@ -38,7 +38,7 @@ func newKV(store *store, nodeName string, value string, parent *node, visibility
 		value:       value,
 		store:       store,
 		watcherLock: sync.RWMutex{},
-		visibility: visibility,
+		visibility:  visibility,
 	}
 	parent.Add(n)
 	n.Notify(Update)
@@ -50,11 +50,11 @@ func newDir(store *store, nodeName string, parent *node, visibility VisibilityLe
 		panic(errors.New("nodeName can not be emtpy."))
 	}
 	n := &node{
-		name:     nodeName,
-		parent:   parent,
-		watchers: nil,
-		Children: make(map[string]*node),
-		store:    store,
+		name:       nodeName,
+		parent:     parent,
+		watchers:   nil,
+		Children:   make(map[string]*node),
+		store:      store,
 		visibility: visibility,
 	}
 	if parent != nil {
