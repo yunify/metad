@@ -11,7 +11,7 @@ import (
 type VisibilityLevel int
 
 const (
-	VisibilityLevelNone      VisibilityLevel = iota - 1
+	VisibilityLevelNone VisibilityLevel = iota - 1
 	VisibilityLevelPublic
 	VisibilityLevelProtected
 	VisibilityLevelPrivate
