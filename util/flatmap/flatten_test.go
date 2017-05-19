@@ -182,6 +182,11 @@ func TestFlattenJSON(t *testing.T) {
           			"int":9663676416,
 				"float":1.1111111
         			}
+        		    },
+        		"env?visibility=1":
+        		    {
+        		    	"name":"app1",
+        		    	"secret?visibility=2":"123456"
         		    }
         		}
 			`,
@@ -196,6 +201,8 @@ func TestFlattenJSON(t *testing.T) {
 				"/hosts/host1/ips/0":        "10.42.185.183",
 				"/hosts/host1/int":          "9663676416",
 				"/hosts/host1/float":        "1.1111111",
+				"/env?visibility=1/name":        "app1",
+				"/env?visibility=1/secret?visibility=2":        "123456",
 			},
 		},
 	}

@@ -12,9 +12,9 @@ func TestRelativePath(t *testing.T) {
 	root := s.Root
 	ctx := context.Background()
 	s.Put(ctx, "/1/2/3", "v")
-	n1 := s.internalGet("/1")
-	n2 := s.internalGet("/1/2")
-	n3 := s.internalGet("/1/2/3")
+	n1 := s.internalGet(ctx,"/1")
+	n2 := s.internalGet(ctx,"/1/2")
+	n3 := s.internalGet(ctx,"/1/2/3")
 
 	assert.Equal(t, "/1/2/3", n3.RelativePath(root))
 	assert.Equal(t, "/2/3", n3.RelativePath(n1))

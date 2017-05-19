@@ -26,7 +26,7 @@ type node struct {
 	visibility VisibilityLevel `json:"visibility"`
 }
 
-func newKV(store *store, nodeName string, value string, parent *node) *node {
+func newKV(store *store, nodeName string, value string, parent *node, visibility VisibilityLevel) *node {
 	if len(nodeName) == 0 {
 		panic(errors.New("nodeName can not be emtpy."))
 	}
@@ -38,13 +38,14 @@ func newKV(store *store, nodeName string, value string, parent *node) *node {
 		value:       value,
 		store:       store,
 		watcherLock: sync.RWMutex{},
+		visibility: visibility,
 	}
 	parent.Add(n)
 	n.Notify(Update)
 	return n
 }
 
-func newDir(store *store, nodeName string, parent *node) *node {
+func newDir(store *store, nodeName string, parent *node, visibility VisibilityLevel) *node {
 	if len(nodeName) == 0 {
 		panic(errors.New("nodeName can not be emtpy."))
 	}
@@ -54,6 +55,7 @@ func newDir(store *store, nodeName string, parent *node) *node {
 		watchers: nil,
 		Children: make(map[string]*node),
 		store:    store,
+		visibility: visibility,
 	}
 	if parent != nil {
 		parent.Add(n)

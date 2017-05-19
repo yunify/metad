@@ -50,7 +50,7 @@ func New() Store {
 func newStore() *store {
 	s := new(store)
 	s.version = atomic.AtomicLong(int64(0))
-	s.Root = newDir(s, "/", nil)
+	s.Root = newDir(s, "/", nil, VisibilityLevelPublic)
 	s.cleanChan = make(chan string, 100)
 	go func() {
 		for {
@@ -58,7 +58,8 @@ func newStore() *store {
 			case nodePath, ok := <-s.cleanChan:
 				if ok {
 					s.worldLock.Lock()
-					node := s.internalGet(nodePath)
+					ctx := WithVisibility(nil, VisibilityLevelPrivate)
+					node := s.internalGet(ctx, nodePath)
 					if node != nil {
 						node.Clean()
 					}
@@ -82,7 +83,7 @@ func (s *store) Get(ctx context.Context, nodePath string) (currentVersion int64,
 
 	nodePath = path.Clean(path.Join("/", nodePath))
 
-	n := s.internalGet(nodePath)
+	n := s.internalGet(ctx, nodePath)
 	if n != nil {
 		val = n.GetValue(ctx)
 		m, mok := val.(map[string]interface{})
@@ -125,7 +126,7 @@ func (s *store) Delete(ctx context.Context, nodePath string) {
 
 	nodePath = path.Clean(path.Join("/", nodePath))
 
-	n := s.internalGet(nodePath)
+	n := s.internalGet(ctx, nodePath)
 	if n == nil {
 		// if the node does not exist, treat as success
 		return
@@ -149,7 +150,7 @@ func (s *store) Watch(ctx context.Context, nodePath string, buf int) Watcher {
 		n = d.GetChild(nodeName)
 		if n == nil {
 			// if watch node not exist, create a empty dir.
-			n = newDir(s, nodeName, d)
+			n = newDir(s, nodeName, d, VisibilityLevelPublic)
 		}
 	}
 	return n.Watch(ctx, buf)
@@ -209,24 +210,34 @@ func (s *store) internalPut(nodePath string, value string) *node {
 	if nodePath == "/" {
 		return s.Root
 	}
-	dirName, nodeName := path.Split(nodePath)
+	dirName, orgNodeName := path.Split(nodePath)
 
 	// walk through the nodePath, create dirs and get the last directory node
 	d := s.walk(dirName, s.checkDir)
 
 	// skip empty node name.
-	if nodeName == "" {
+	if orgNodeName == "" {
 		return d
 	}
+
+	nodeName,vLevel := ParseVisibility(orgNodeName)
 
 	n := d.GetChild(nodeName)
 
 	if n != nil {
 		n.Write(value)
+		if vLevel != VisibilityLevelNone {
+			n.SetVisibility(vLevel)
+		}
 		return n
 	}
 
-	n = newKV(s, nodeName, value, d)
+	if vLevel == VisibilityLevelNone {
+		vLevel = VisibilityLevelPublic
+	}
+
+	n = newKV(s, nodeName, value, d, vLevel)
+
 	return n
 }
 
@@ -238,7 +249,7 @@ func (s *store) internalPutBulk(nodePath string, values map[string]string) {
 }
 
 // InternalGet gets the node of the given nodePath.
-func (s *store) internalGet(nodePath string) *node {
+func (s *store) internalGet(ctx context.Context, nodePath string) *node {
 
 	walkFunc := func(parent *node, name string) *node {
 		if parent == nil {
@@ -251,6 +262,13 @@ func (s *store) internalGet(nodePath string) *node {
 
 		child := parent.GetChild(name)
 		if child != nil {
+			vlevel, ok := ctx.Value(VisibilityKey).(VisibilityLevel)
+			if !ok {
+				vlevel = VisibilityLevelPublic
+			}
+			if vlevel < child.visibility {
+				return nil
+			}
 			return child
 		}
 
@@ -265,17 +283,25 @@ func (s *store) internalGet(nodePath string) *node {
 // If it is a directory, this function will return the pointer to that node.
 // If it does not exist, this function will create a new directory and return the pointer to that node.
 // If it is a file, this function will return error.
-func (s *store) checkDir(parent *node, dirName string) *node {
+func (s *store) checkDir(parent *node, orgDirName string) *node {
 	// skip empty node name.
-	if dirName == "" {
+	if orgDirName == "" {
 		return parent
 	}
+	dirName,vLevel := ParseVisibility(orgDirName)
+
 	node := parent.GetChild(dirName)
 
 	if node != nil {
+		if vLevel != VisibilityLevelNone {
+			node.SetVisibility(vLevel)
+		}
 		return node
 	}
+	if vLevel == VisibilityLevelNone {
+		vLevel = VisibilityLevelPublic
+	}
+	n := newDir(s, dirName, parent, vLevel)
 
-	n := newDir(s, dirName, parent)
 	return n
 }
