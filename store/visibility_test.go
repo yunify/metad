@@ -1,10 +1,10 @@
 package store
 
 import (
-	"testing"
-	"github.com/stretchr/testify/assert"
 	"fmt"
+	"github.com/stretchr/testify/assert"
 	"github.com/yunify/metad/util"
+	"testing"
 )
 
 type TestCase struct {
@@ -44,7 +44,7 @@ func TestGetVisibilityByLinkParameter(t *testing.T) {
 	Assert(t, testCases, ParseVisibility, assert.Equal)
 }
 
-func Assert(t *testing.T, testCases []TestCase, function func(input string) (string, VisibilityLevel), assertFun func(t assert.TestingT, expected, actual interface{}, msgAndArgs ...interface{}) (bool)) {
+func Assert(t *testing.T, testCases []TestCase, function func(input string) (string, VisibilityLevel), assertFun func(t assert.TestingT, expected, actual interface{}, msgAndArgs ...interface{}) bool) {
 	for idx, testCase := range testCases {
 		path, visibility := function(testCase.input)
 		assertFun(t, testCase.expect_visibility, visibility, fmt.Sprintf("TestCase [%v] func [%v] input [%v] expect [%v], but get [%v]", idx, util.GetFunctionName(function), testCase.input, testCase.expect_visibility, visibility))

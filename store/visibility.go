@@ -2,10 +2,10 @@ package store
 
 import (
 	"context"
-	"net/url"
-	"strings"
 	"github.com/yunify/metad/log"
+	"net/url"
 	"strconv"
+	"strings"
 )
 
 type VisibilityLevel int
@@ -20,7 +20,7 @@ const (
 	VisibilityKey = "visibility"
 )
 
-func WithVisibility(ctx context.Context, vlevel VisibilityLevel) (context.Context) {
+func WithVisibility(ctx context.Context, vlevel VisibilityLevel) context.Context {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -55,7 +55,7 @@ func ParseVisibility(link string) (string, VisibilityLevel) {
 	return link, vLevel
 }
 
-func TrimVisibilityPrefix(name string) (string) {
+func TrimVisibilityPrefix(name string) string {
 	if len(name) <= 2 {
 		return name
 	}

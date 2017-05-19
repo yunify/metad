@@ -3,9 +3,9 @@ package util
 import (
 	"github.com/yunify/metad/util/flatmap"
 	"path"
-	"strings"
 	"reflect"
 	"runtime"
+	"strings"
 )
 
 func TrimPathPrefix(nodePath string, prefix string) string {

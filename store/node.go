@@ -94,7 +94,7 @@ func (n *node) IsHidden() bool {
 	return n.name[0] == '_'
 }
 
-func (n *node) Visibility() (VisibilityLevel) {
+func (n *node) Visibility() VisibilityLevel {
 	return n.visibility
 }
 
