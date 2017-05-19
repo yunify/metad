@@ -100,3 +100,8 @@ func TestGetMapValue(t *testing.T) {
 	assert.Equal(t, GetMapValue(m, "/nodes/1/name"), "node1")
 	assert.Equal(t, GetMapValue(m, "nodes/2"), "")
 }
+
+func TestGetFunctionName(t *testing.T) {
+	assert.Equal(t, "github.com/yunify/metad/util.TestGetMapValue", GetFunctionName(TestGetMapValue))
+	assert.Equal(t, "github.com/yunify/metad/util.TestGetFunctionName.func1", GetFunctionName(func() {}))
+}

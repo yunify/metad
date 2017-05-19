@@ -23,6 +23,7 @@ import (
 	"github.com/yunify/metad/backends"
 	"github.com/yunify/metad/log"
 	"github.com/yunify/metad/metadata"
+	"github.com/yunify/metad/store"
 	"github.com/yunify/metad/util/flatmap"
 	yaml "gopkg.in/yaml.v2"
 )
@@ -572,6 +573,7 @@ func (m *Metad) manageWrapper(manager manageFunc) func(w http.ResponseWriter, re
 		start := time.Now()
 		requestID := m.generateRequestID()
 		ctx := context.WithValue(req.Context(), "requestID", requestID)
+		ctx = store.WithVisibility(ctx, store.VisibilityLevelPrivate)
 		result, err := manager(ctx, req)
 		version := m.metadataRepo.DataVersion()
 

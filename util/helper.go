@@ -4,6 +4,8 @@ import (
 	"github.com/yunify/metad/util/flatmap"
 	"path"
 	"strings"
+	"reflect"
+	"runtime"
 )
 
 func TrimPathPrefix(nodePath string, prefix string) string {
@@ -46,4 +48,8 @@ func GetMapValue(m interface{}, nodePath string) string {
 	fm := flatmap.Flatten(m)
 	v := fm[nodePath]
 	return v
+}
+
+func GetFunctionName(i interface{}) string {
+	return runtime.FuncForPC(reflect.ValueOf(i).Pointer()).Name()
 }

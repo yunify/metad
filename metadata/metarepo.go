@@ -202,6 +202,8 @@ func (r *MetadataRepo) Self(ctx context.Context, clientIP string, nodePath strin
 	if clientIP == "" {
 		panic(errors.New("clientIP must not be empty."))
 	}
+	ctx = store.WithVisibility(ctx, store.VisibilityLevelPrivate)
+
 	nodePath = path.Join("/", nodePath)
 	mappingData := r.GetMapping(ctx, path.Join("/", clientIP))
 	if mappingData == nil {
@@ -218,7 +220,15 @@ func (r *MetadataRepo) Self(ctx context.Context, clientIP string, nodePath strin
 	return r.getMappingDatas(ctx, nodePath, mapping)
 }
 
-func (r *MetadataRepo) getMappingData(ctx context.Context, nodePath, link string) interface{} {
+func (r *MetadataRepo) getMappingData(ctx context.Context, nodePath, orgLink string) interface{} {
+	link, vLevel := store.ParseVisibility(orgLink)
+	if vLevel == store.VisibilityLevelNone {
+		vLevel = store.VisibilityLevelPrivate
+	}
+	//self ctx default visibility level is private.
+	if vLevel != store.VisibilityLevelPrivate {
+		ctx = store.WithVisibility(ctx, vLevel)
+	}
 	nodePath = path.Join(link, nodePath)
 	_, val := r.data.Get(ctx, nodePath)
 	return val

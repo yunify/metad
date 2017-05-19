@@ -10,18 +10,20 @@ import (
 )
 
 type node struct {
-	Name string `json:"name"`
+	name string `json:"name"`
 
 	parent *node
 
 	watchers *list.List
 
-	Value    string           `json:"value"`    // for key-value pair
+	value    string           `json:"value"`    // for key-value pair
 	Children map[string]*node `json:"children"` // for directory
 
 	store *store // A reference to the store this node is attached to.
 
 	watcherLock sync.RWMutex
+
+	visibility VisibilityLevel `json:"visibility"`
 }
 
 func newKV(store *store, nodeName string, value string, parent *node) *node {
@@ -29,11 +31,11 @@ func newKV(store *store, nodeName string, value string, parent *node) *node {
 		panic(errors.New("nodeName can not be emtpy."))
 	}
 	n := &node{
-		Name:        nodeName,
+		name:        nodeName,
 		parent:      parent,
 		watchers:    nil,
 		Children:    nil,
-		Value:       value,
+		value:       value,
 		store:       store,
 		watcherLock: sync.RWMutex{},
 	}
@@ -47,7 +49,7 @@ func newDir(store *store, nodeName string, parent *node) *node {
 		panic(errors.New("nodeName can not be emtpy."))
 	}
 	n := &node{
-		Name:     nodeName,
+		name:     nodeName,
 		parent:   parent,
 		watchers: nil,
 		Children: make(map[string]*node),
@@ -59,11 +61,15 @@ func newDir(store *store, nodeName string, parent *node) *node {
 	return n
 }
 
+func (n *node) Name() string {
+	return n.name
+}
+
 func (n *node) Path() string {
 	if n.parent == nil {
-		return n.Name
+		return n.name
 	} else {
-		return path.Join(n.parent.Path(), n.Name)
+		return path.Join(n.parent.Path(), n.name)
 	}
 }
 
@@ -71,7 +77,7 @@ func (n *node) RelativePath(end *node) string {
 	if n.parent == nil || n == end {
 		return "/"
 	} else {
-		return path.Join(n.parent.RelativePath(end), n.Name)
+		return path.Join(n.parent.RelativePath(end), n.name)
 	}
 }
 
@@ -85,7 +91,15 @@ func (n *node) IsRoot() bool {
 // For example if we have /foo/_hidden and /foo/notHidden, get "/foo"
 // will only return /foo/notHidden
 func (n *node) IsHidden() bool {
-	return n.Name[0] == '_'
+	return n.name[0] == '_'
+}
+
+func (n *node) Visibility() (VisibilityLevel) {
+	return n.visibility
+}
+
+func (n *node) SetVisibility(visibility VisibilityLevel) {
+	n.visibility = visibility
 }
 
 // IsDir function checks whether the node is a dir.
@@ -112,7 +126,7 @@ func (n *node) AsLeaf() {
 
 // Read function gets the value of the node.
 func (n *node) Read() string {
-	return n.Value
+	return n.value
 }
 
 // Write function set the value of the node to the given value.
@@ -121,8 +135,8 @@ func (n *node) Write(value string) {
 		return
 	}
 
-	oldValue := n.Value
-	n.Value = value
+	oldValue := n.value
+	n.value = value
 	if n.IsDir() {
 		// if dir is empty, and set a text value ,so convert to leaf
 		if n.ChildrenCount() == 0 {
@@ -181,7 +195,7 @@ func (n *node) Add(child *node) {
 	if !n.IsDir() {
 		n.AsDir()
 	}
-	n.Children[child.Name] = child
+	n.Children[child.name] = child
 }
 
 // Remove function remove the node.
@@ -190,12 +204,12 @@ func (n *node) Remove() bool {
 	if !n.IsDir() {
 		// do not remove node has watcher
 		if n.HasWatcher() {
-			n.Value = ""
+			n.value = ""
 			n.AsDir()
 			return true
 		}
-		if n.parent != nil && n.parent.Children[n.Name] == n {
-			delete(n.parent.Children, n.Name)
+		if n.parent != nil && n.parent.Children[n.name] == n {
+			delete(n.parent.Children, n.name)
 			// only leaf node trigger delete event.
 			n.Notify(Delete)
 			n.parent.Clean()
@@ -205,15 +219,15 @@ func (n *node) Remove() bool {
 	}
 
 	// clear value
-	n.Value = ""
+	n.value = ""
 
 	// retry to remove all children
 	for _, node := range n.Children {
 		node.Remove()
 	}
 
-	if n.parent != nil && n.parent.Children[n.Name] == n && n.ChildrenCount() == 0 && !n.HasWatcher() {
-		delete(n.parent.Children, n.Name)
+	if n.parent != nil && n.parent.Children[n.name] == n && n.ChildrenCount() == 0 && !n.HasWatcher() {
+		delete(n.parent.Children, n.name)
 		n.parent.Clean()
 		return true
 	}
@@ -227,7 +241,7 @@ func (n *node) Clean() bool {
 	}
 	// if children is empty, try to remove  or covert to leaf node .
 	if n.ChildrenCount() == 0 {
-		if n.Value == "" {
+		if n.value == "" {
 			if !n.HasWatcher() {
 				return n.Remove()
 			}
@@ -241,11 +255,15 @@ func (n *node) Clean() bool {
 
 // Return node value, if node is dir, will return a map contains children's value, otherwise return n.Value
 func (n *node) GetValue(ctx context.Context) interface{} {
+	vlevel, ok := ctx.Value(VisibilityKey).(VisibilityLevel)
+	if !ok {
+		vlevel = VisibilityLevelPublic
+	}
 	if n.IsDir() {
 		values := make(map[string]interface{})
 		for k, node := range n.Children {
-			//skip hidden node.
-			if node.IsHidden() {
+			//skip no visibility node.
+			if vlevel < node.Visibility() {
 				continue
 			}
 			v := node.GetValue(ctx)
@@ -258,14 +276,14 @@ func (n *node) GetValue(ctx context.Context) interface{} {
 		}
 		return values
 	} else {
-		return n.Value
+		return n.value
 	}
 }
 
 func (n *node) internalNotify(action string, eventNode *node) {
 
 	if n.HasWatcher() {
-		event := newEvent(action, eventNode.RelativePath(n), eventNode.Value)
+		event := newEvent(action, eventNode.RelativePath(n), eventNode.value)
 		n.watcherLock.RLock()
 		for e := n.watchers.Front(); e != nil; e = e.Next() {
 			w := e.Value.(Watcher)
