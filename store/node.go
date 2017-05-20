@@ -97,7 +97,15 @@ func (n *node) IsHidden() bool {
 }
 
 func (n *node) Visibility() VisibilityLevel {
-	return n.visibility
+	if n.IsRoot() {
+		return n.visibility
+	} else {
+		parentVLevel := n.parent.Visibility()
+		if parentVLevel > n.visibility {
+			return parentVLevel
+		}
+		return n.visibility
+	}
 }
 
 func (n *node) SetVisibility(visibility VisibilityLevel) {
@@ -265,7 +273,7 @@ func (n *node) GetValue(ctx context.Context) interface{} {
 		values := make(map[string]interface{})
 		for k, node := range n.Children {
 			//skip no visibility node.
-			if vlevel < node.Visibility() {
+			if vlevel < node.visibility {
 				continue
 			}
 			v := node.GetValue(ctx)
@@ -288,7 +296,10 @@ func (n *node) internalNotify(action string, eventNode *node) {
 		event := newEvent(action, eventNode.RelativePath(n), eventNode.value)
 		n.watcherLock.RLock()
 		for e := n.watchers.Front(); e != nil; e = e.Next() {
-			w := e.Value.(Watcher)
+			w := e.Value.(*watcher)
+			if w.visibility < eventNode.Visibility() {
+				continue
+			}
 			select {
 			case w.EventChan() <- event:
 				break
@@ -318,7 +329,11 @@ func (n *node) Watch(ctx context.Context, bufLen int) Watcher {
 	if n.watchers == nil {
 		n.watchers = list.New()
 	}
-	w := newWatcher(n, bufLen)
+	vlevel, ok := ctx.Value(VisibilityKey).(VisibilityLevel)
+	if !ok {
+		vlevel = VisibilityLevelPublic
+	}
+	w := newWatcher(n, bufLen, vlevel)
 	elem := n.watchers.PushBack(w)
 	w.remove = func() {
 

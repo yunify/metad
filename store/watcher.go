@@ -35,16 +35,18 @@ type Watcher interface {
 }
 
 type watcher struct {
-	eventChan chan *Event
-	removed   bool
-	node      *node
-	remove    func()
+	eventChan  chan *Event
+	removed    bool
+	node       *node
+	remove     func()
+	visibility VisibilityLevel
 }
 
-func newWatcher(node *node, bufLen int) *watcher {
+func newWatcher(node *node, bufLen int, visibility VisibilityLevel) *watcher {
 	w := &watcher{
-		eventChan: make(chan *Event, bufLen),
-		node:      node,
+		eventChan:  make(chan *Event, bufLen),
+		node:       node,
+		visibility: visibility,
 	}
 	return w
 }

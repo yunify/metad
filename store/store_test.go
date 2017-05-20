@@ -474,5 +474,113 @@ func TestStoreVisibility(t *testing.T) {
 	_, exist = mapVal["public_key"]
 	assert.True(t, exist)
 
+	// test update visibility
+	data = map[string]interface{}{
+		"data": map[string]interface{}{
+			"env?visibility=0": map[string]interface{}{
+				"name":                "app1",
+				"secret?visibility=2": "123456",
+			},
+			"public_key": "public_key_val",
+		},
+	}
+
+	s.Put(ctx, "/", data)
+
+	_, val = s.Get(publicCtx, "/data")
+	mapVal, mok = val.(map[string]interface{})
+	assert.True(t, mok)
+
+	_, exist = mapVal["env"]
+	assert.True(t, exist)
+
+	s.Destroy()
+}
+
+func TestWatchVisibility(t *testing.T) {
+	ctx := newDefaultCtx()
+	s := New()
+
+	data := map[string]interface{}{
+		"data": map[string]interface{}{
+			"env?visibility=1": map[string]interface{}{
+				"name":                "app1",
+				"secret?visibility=2": "123456",
+			},
+			"public_key": "public_key_val",
+		},
+	}
+
+	s.Put(ctx, "/", data)
+
+	// test public
+
+	publicCtx := WithVisibility(ctx, VisibilityLevelPublic)
+	protectedCtx := WithVisibility(ctx, VisibilityLevelProtected)
+	privateCtx := WithVisibility(ctx, VisibilityLevelPrivate)
+
+	publicWatcher := s.Watch(publicCtx, "/data", 10)
+	publicWatcher2 := s.Watch(publicCtx, "/data/env/name", 10)
+	protectedWatcher := s.Watch(protectedCtx, "/data", 10)
+	privateWatcher := s.Watch(privateCtx, "/data", 10)
+
+	updatePublicData := map[string]interface{}{
+		"data": map[string]interface{}{
+			"public_key": "public_key_val2",
+		},
+	}
+
+	s.Put(ctx, "/", updatePublicData)
+
+	e1 := readEvent(publicWatcher.EventChan())
+	e2 := readEvent(publicWatcher2.EventChan())
+	e3 := readEvent(protectedWatcher.EventChan())
+	e4 := readEvent(privateWatcher.EventChan())
+
+	assert.Equal(t, "public_key_val2", e1.Value)
+	assert.Nil(t, e2)
+	assert.Equal(t, "public_key_val2", e3.Value)
+	assert.Equal(t, "public_key_val2", e4.Value)
+
+	updateProtectedData := map[string]interface{}{
+		"data": map[string]interface{}{
+			"env": map[string]interface{}{
+				"name": "app2",
+			},
+		},
+	}
+
+	s.Put(ctx, "/", updateProtectedData)
+
+	e1 = readEvent(publicWatcher.EventChan())
+	e2 = readEvent(publicWatcher2.EventChan())
+	e3 = readEvent(protectedWatcher.EventChan())
+	e4 = readEvent(privateWatcher.EventChan())
+
+	assert.Nil(t, e1)
+	assert.Nil(t, e2)
+	assert.Equal(t, "app2", e3.Value)
+	assert.Equal(t, "app2", e4.Value)
+
+	updatePrivateData := map[string]interface{}{
+		"data": map[string]interface{}{
+			"env": map[string]interface{}{
+				"secret": "1234567",
+			},
+		},
+	}
+
+	s.Put(ctx, "/", updatePrivateData)
+
+	e1 = readEvent(publicWatcher.EventChan())
+	e2 = readEvent(publicWatcher2.EventChan())
+	e3 = readEvent(protectedWatcher.EventChan())
+	e4 = readEvent(privateWatcher.EventChan())
+
+	assert.Nil(t, e1)
+	assert.Nil(t, e2)
+	assert.Nil(t, e3)
+	assert.Equal(t, "1234567", e4.Value)
+
 	s.Destroy()
 }
