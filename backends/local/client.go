@@ -20,7 +20,7 @@ func NewLocalClient() (*Client, error) {
 }
 
 func newDefaultContext() context.Context {
-	ctx := context.Background()
+	ctx := store.WithVisibility(nil, store.VisibilityLevelPrivate)
 	return ctx
 }
 

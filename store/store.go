@@ -266,7 +266,7 @@ func (s *store) internalGet(ctx context.Context, nodePath string) *node {
 			if !ok {
 				vlevel = VisibilityLevelPublic
 			}
-			if vlevel < child.visibility {
+			if vlevel < child.Visibility {
 				return nil
 			}
 			return child
@@ -282,26 +282,19 @@ func (s *store) internalGet(ctx context.Context, nodePath string) *node {
 // checkDir will check whether the component is a directory under parent node.
 // If it is a directory, this function will return the pointer to that node.
 // If it does not exist, this function will create a new directory and return the pointer to that node.
-// If it is a file, this function will return error.
-func (s *store) checkDir(parent *node, orgDirName string) *node {
+func (s *store) checkDir(parent *node, dirName string) *node {
 	// skip empty node name.
-	if orgDirName == "" {
+	if dirName == "" {
 		return parent
 	}
-	dirName, vLevel := ParseVisibility(orgDirName)
 
 	node := parent.GetChild(dirName)
 
 	if node != nil {
-		if vLevel != VisibilityLevelNone {
-			node.SetVisibility(vLevel)
-		}
 		return node
 	}
-	if vLevel == VisibilityLevelNone {
-		vLevel = VisibilityLevelPublic
-	}
-	n := newDir(s, dirName, parent, vLevel)
+
+	n := newDir(s, dirName, parent)
 
 	return n
 }

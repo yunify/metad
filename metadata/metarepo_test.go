@@ -614,6 +614,108 @@ func TestSelfWatchNodeNotExist(t *testing.T) {
 	metarepo.StopSync()
 }
 
+func TestMetadataVisibility(t *testing.T){
+	ctx := newDefaultCtx()
+	prefix := fmt.Sprintf("/prefix%v", rand.Intn(1000))
+	group := fmt.Sprintf("/group%v", rand.Intn(1000))
+	nodes := backends.GetDefaultBackends(backend)
+
+	config := backends.Config{
+		Backend:      backend,
+		BackendNodes: nodes,
+		Prefix:       prefix,
+		Group:        group,
+	}
+	storeClient, err := backends.New(config)
+	assert.NoError(t, err)
+
+	metarepo := New(false, storeClient)
+
+	metarepo.DeleteMapping(ctx, "/")
+	metarepo.DeleteData(ctx, "/")
+
+	metarepo.StartSync()
+
+	data := map[string]interface{}{
+		"clusters": map[string]interface{}{
+			"cl-01": map[string]interface{}{
+				"hosts": map[string]interface{}{
+					"i-01":map[string]interface{}{
+						"ip":"192.168.0.1",
+						"token?visibility=2":"123456",
+					},
+				},
+				"env": map[string]interface{}{
+					"name?visibility=1":                "app1",
+					"secret?visibility=2": "123456",
+				},
+			},
+			"cl-02": map[string]interface{}{
+				"hosts": map[string]interface{}{
+					"i-02":map[string]interface{}{
+						"ip":"192.168.1.2",
+						"token?visibility=2":"654321",
+					},
+				},
+				"env": map[string]interface{}{
+					"name?visibility=1":                "app2",
+					"secret?visibility=2": "654321",
+				},
+			},
+		},
+	}
+
+	err = metarepo.PutData(ctx, "/", data, false)
+	assert.NoError(t, err)
+	time.Sleep(sleepTime)
+	fmt.Printf("%s", metarepo.data.Json())
+
+	mapping := map[string]interface{}{
+		"192.168.0.1": map[string]interface{}{
+			"host":"/clusters/cl-01/hosts/i-01",
+			"env":"/clusters/cl-01/env",
+		},
+		"192.168.1.2": map[string]interface{}{
+			"host":"/clusters/cl-02/hosts/i-02",
+			"env":"/clusters/cl-02/env",
+			"links": map[string]interface{}{
+				"app1":"/clusters/cl-01",
+			},
+		},
+	}
+
+	err = metarepo.PutMapping(ctx, "/", mapping, false)
+	assert.NoError(t, err)
+
+	// test GetSelf
+	time.Sleep(sleepTime)
+	ip := "192.168.0.1"
+
+	val := metarepo.Self(ctx, ip, "/")
+	mapVal, mok := val.(map[string]interface{})
+	assert.True(t, mok)
+
+	hostVal := mapVal["host"].(map[string]interface{})
+
+	assert.Equal(t, "192.168.0.1", hostVal["ip"])
+	assert.Equal(t, "123456", hostVal["token"])
+
+	envVal := mapVal["env"].(map[string]interface{})
+
+	assert.Equal(t, "app1", envVal["name"])
+	assert.Equal(t, "123456", envVal["secret"])
+
+	// test Root
+
+	//_, val = metarepo.Root(ctx, ip, "/")
+	//fmt.Printf("%+v", val)
+
+
+	metarepo.DeleteData(ctx, "/")
+	metarepo.DeleteMapping(ctx, "/")
+	metarepo.StopSync()
+}
+
 func FillTestData(metarepo *MetadataRepo) map[string]string {
 	ctx := newDefaultCtx()
 

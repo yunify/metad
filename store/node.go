@@ -7,23 +7,25 @@ import (
 	"errors"
 	"path"
 	"sync"
+	"fmt"
 )
 
 type node struct {
-	name string `json:"name"`
+	Name string `json:"name"`
 
 	parent *node
 
 	watchers *list.List
 
-	value    string           `json:"value"`    // for key-value pair
-	Children map[string]*node `json:"children"` // for directory
+	Value    string           `json:"value"`    // for key-value pair
+	Children map[string]*node `json:"children,omitempty"` // for directory
 
 	store *store // A reference to the store this node is attached to.
 
 	watcherLock sync.RWMutex
 
-	visibility VisibilityLevel `json:"visibility"`
+	// only leaf node support Visibility
+	Visibility VisibilityLevel `json:"visibility"`
 }
 
 func newKV(store *store, nodeName string, value string, parent *node, visibility VisibilityLevel) *node {
@@ -31,31 +33,31 @@ func newKV(store *store, nodeName string, value string, parent *node, visibility
 		panic(errors.New("nodeName can not be emtpy."))
 	}
 	n := &node{
-		name:        nodeName,
+		Name:        nodeName,
 		parent:      parent,
 		watchers:    nil,
 		Children:    nil,
-		value:       value,
+		Value:       value,
 		store:       store,
 		watcherLock: sync.RWMutex{},
-		visibility:  visibility,
+		Visibility:  visibility,
 	}
 	parent.Add(n)
 	n.Notify(Update)
 	return n
 }
 
-func newDir(store *store, nodeName string, parent *node, visibility VisibilityLevel) *node {
+func newDir(store *store, nodeName string, parent *node) *node {
 	if len(nodeName) == 0 {
 		panic(errors.New("nodeName can not be emtpy."))
 	}
 	n := &node{
-		name:       nodeName,
+		Name:       nodeName,
 		parent:     parent,
 		watchers:   nil,
 		Children:   make(map[string]*node),
 		store:      store,
-		visibility: visibility,
+		Visibility: VisibilityLevelPublic,
 	}
 	if parent != nil {
 		parent.Add(n)
@@ -63,15 +65,11 @@ func newDir(store *store, nodeName string, parent *node, visibility VisibilityLe
 	return n
 }
 
-func (n *node) Name() string {
-	return n.name
-}
-
 func (n *node) Path() string {
 	if n.parent == nil {
-		return n.name
+		return n.Name
 	} else {
-		return path.Join(n.parent.Path(), n.name)
+		return path.Join(n.parent.Path(), n.Name)
 	}
 }
 
@@ -79,7 +77,7 @@ func (n *node) RelativePath(end *node) string {
 	if n.parent == nil || n == end {
 		return "/"
 	} else {
-		return path.Join(n.parent.RelativePath(end), n.name)
+		return path.Join(n.parent.RelativePath(end), n.Name)
 	}
 }
 
@@ -87,29 +85,8 @@ func (n *node) IsRoot() bool {
 	return n.parent == nil
 }
 
-// IsHidden function checks if the node is a hidden node. A hidden node
-// will begin with '_'
-// A hidden node will not be shown via get command under a directory
-// For example if we have /foo/_hidden and /foo/notHidden, get "/foo"
-// will only return /foo/notHidden
-func (n *node) IsHidden() bool {
-	return n.name[0] == '_'
-}
-
-func (n *node) Visibility() VisibilityLevel {
-	if n.IsRoot() {
-		return n.visibility
-	} else {
-		parentVLevel := n.parent.Visibility()
-		if parentVLevel > n.visibility {
-			return parentVLevel
-		}
-		return n.visibility
-	}
-}
-
 func (n *node) SetVisibility(visibility VisibilityLevel) {
-	n.visibility = visibility
+	n.Visibility = visibility
 }
 
 // IsDir function checks whether the node is a dir.
@@ -121,6 +98,7 @@ func (n *node) IsDir() bool {
 func (n *node) AsDir() {
 	if !n.IsDir() {
 		n.Children = make(map[string]*node)
+		n.Visibility = VisibilityLevelPublic
 	}
 	// treat convert leaf to dir as a delete.
 	n.Notify(Delete)
@@ -136,7 +114,7 @@ func (n *node) AsLeaf() {
 
 // Read function gets the value of the node.
 func (n *node) Read() string {
-	return n.value
+	return n.Value
 }
 
 // Write function set the value of the node to the given value.
@@ -145,8 +123,8 @@ func (n *node) Write(value string) {
 		return
 	}
 
-	oldValue := n.value
-	n.value = value
+	oldValue := n.Value
+	n.Value = value
 	if n.IsDir() {
 		// if dir is empty, and set a text value ,so convert to leaf
 		if n.ChildrenCount() == 0 {
@@ -205,7 +183,7 @@ func (n *node) Add(child *node) {
 	if !n.IsDir() {
 		n.AsDir()
 	}
-	n.Children[child.name] = child
+	n.Children[child.Name] = child
 }
 
 // Remove function remove the node.
@@ -214,12 +192,12 @@ func (n *node) Remove() bool {
 	if !n.IsDir() {
 		// do not remove node has watcher
 		if n.HasWatcher() {
-			n.value = ""
+			n.Value = ""
 			n.AsDir()
 			return true
 		}
-		if n.parent != nil && n.parent.Children[n.name] == n {
-			delete(n.parent.Children, n.name)
+		if n.parent != nil && n.parent.Children[n.Name] == n {
+			delete(n.parent.Children, n.Name)
 			// only leaf node trigger delete event.
 			n.Notify(Delete)
 			n.parent.Clean()
@@ -229,15 +207,15 @@ func (n *node) Remove() bool {
 	}
 
 	// clear value
-	n.value = ""
+	n.Value = ""
 
 	// retry to remove all children
 	for _, node := range n.Children {
 		node.Remove()
 	}
 
-	if n.parent != nil && n.parent.Children[n.name] == n && n.ChildrenCount() == 0 && !n.HasWatcher() {
-		delete(n.parent.Children, n.name)
+	if n.parent != nil && n.parent.Children[n.Name] == n && n.ChildrenCount() == 0 && !n.HasWatcher() {
+		delete(n.parent.Children, n.Name)
 		n.parent.Clean()
 		return true
 	}
@@ -251,7 +229,7 @@ func (n *node) Clean() bool {
 	}
 	// if children is empty, try to remove  or covert to leaf node .
 	if n.ChildrenCount() == 0 {
-		if n.value == "" {
+		if n.Value == "" {
 			if !n.HasWatcher() {
 				return n.Remove()
 			}
@@ -273,7 +251,7 @@ func (n *node) GetValue(ctx context.Context) interface{} {
 		values := make(map[string]interface{})
 		for k, node := range n.Children {
 			//skip no visibility node.
-			if vlevel < node.visibility {
+			if vlevel < node.Visibility {
 				continue
 			}
 			v := node.GetValue(ctx)
@@ -286,18 +264,25 @@ func (n *node) GetValue(ctx context.Context) interface{} {
 		}
 		return values
 	} else {
-		return n.value
+		if vlevel < n.Visibility {
+			return nil
+		}
+		return n.Value
 	}
 }
 
 func (n *node) internalNotify(action string, eventNode *node) {
 
 	if n.HasWatcher() {
-		event := newEvent(action, eventNode.RelativePath(n), eventNode.value)
+		eventPath := eventNode.RelativePath(n)
+		if eventNode.Visibility != VisibilityLevelPublic {
+			eventPath = fmt.Sprintf("%s?%s=%v", eventPath, VisibilityKey, eventNode.Visibility)
+		}
+		event := newEvent(action, eventPath, eventNode.Value)
 		n.watcherLock.RLock()
 		for e := n.watchers.Front(); e != nil; e = e.Next() {
 			w := e.Value.(*watcher)
-			if w.visibility < eventNode.Visibility() {
+			if w.visibility < eventNode.Visibility {
 				continue
 			}
 			select {
