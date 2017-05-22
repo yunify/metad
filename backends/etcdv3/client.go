@@ -105,7 +105,7 @@ func (c *Client) Delete(nodePath string, dir bool) error {
 
 func (c *Client) Sync(store store.Store, stopChan chan bool) {
 	startedChan := make(chan bool)
-	go c.internalSync(c.prefix, store, stopChan,startedChan)
+	go c.internalSync(c.prefix, store, stopChan, startedChan)
 	<-startedChan
 }
 
@@ -133,7 +133,7 @@ func (c *Client) DeleteMapping(nodePath string, dir bool) error {
 
 func (c *Client) SyncMapping(mapping store.Store, stopChan chan bool) {
 	startedChan := make(chan bool)
-	go c.internalSync(c.mappingPrefix, mapping, stopChan,startedChan)
+	go c.internalSync(c.mappingPrefix, mapping, stopChan, startedChan)
 	<-startedChan
 }
 
