@@ -78,15 +78,6 @@ func (n *node) IsRoot() bool {
 	return n.parent == nil
 }
 
-// IsHidden function checks if the node is a hidden node. A hidden node
-// will begin with '_'
-// A hidden node will not be shown via get command under a directory
-// For example if we have /foo/_hidden and /foo/notHidden, get "/foo"
-// will only return /foo/notHidden
-func (n *node) IsHidden() bool {
-	return n.Name[0] == '_'
-}
-
 // IsDir function checks whether the node is a dir.
 func (n *node) IsDir() bool {
 	return n.Children != nil
@@ -243,10 +234,6 @@ func (n *node) GetValue() interface{} {
 	if n.IsDir() {
 		values := make(map[string]interface{})
 		for k, node := range n.Children {
-			//skip hidden node.
-			if node.IsHidden() {
-				continue
-			}
 			v := node.GetValue()
 			m, isMap := v.(map[string]interface{})
 			// skip empty dir.
