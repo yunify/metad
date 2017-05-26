@@ -32,6 +32,8 @@ type Store interface {
 	Version() int64
 	// Destroy the store
 	Destroy()
+	// Traveller
+	Traveller(rules []AccessRule) Traveller
 }
 
 type store struct {
@@ -179,6 +181,10 @@ func (s *store) Destroy() {
 	s.Root = nil
 }
 
+func (s *store) Traveller(rules []AccessRule) Traveller {
+	return newNodeTraveller(s, rules)
+}
+
 // walk walks all the nodePath and apply the walkFunc on each directory
 func (s *store) walk(nodePath string, walkFunc func(prev *node, component string) *node) *node {
 	components := strings.Split(nodePath, "/")
@@ -188,9 +194,8 @@ func (s *store) walk(nodePath string, walkFunc func(prev *node, component string
 	for i := 1; i < len(components); i++ {
 		if len(components[i]) == 0 {
 			// ignore empty string
-			return curr
+			continue
 		}
-
 		curr = walkFunc(curr, components[i])
 		if curr == nil {
 			return nil
