@@ -38,7 +38,7 @@ func TestMetarepoData(t *testing.T) {
 	storeClient, err := backends.New(config)
 	assert.NoError(t, err)
 
-	metarepo := New(false, storeClient)
+	metarepo := New(storeClient)
 	metarepo.DeleteData("/")
 
 	metarepo.StartSync()
@@ -46,8 +46,14 @@ func TestMetarepoData(t *testing.T) {
 	testData := FillTestData(metarepo)
 	time.Sleep(sleepTime)
 	ValidTestData(t, testData, metarepo.data)
-
-	_, val := metarepo.Root("192.168.0.1", "/nodes/0")
+	clientIP := "192.168.0.1"
+	accessRule := map[string][]store.AccessRule{
+		clientIP: {
+			{Path: "/", Mode: store.AccessModeRead},
+		},
+	}
+	metarepo.PutAccessRule(accessRule)
+	_, val := metarepo.Root(clientIP, "/nodes/0")
 	assert.NotNil(t, val)
 
 	mapVal, mok := val.(map[string]interface{})
@@ -95,7 +101,7 @@ func TestMetarepoMapping(t *testing.T) {
 	storeClient, err := backends.New(config)
 	assert.NoError(t, err)
 
-	metarepo := New(false, storeClient)
+	metarepo := New(storeClient)
 	metarepo.DeleteData("/")
 	metarepo.DeleteMapping("/")
 
@@ -203,7 +209,7 @@ func TestMetarepoSelf(t *testing.T) {
 	storeClient, err := backends.New(config)
 	assert.NoError(t, err)
 
-	metarepo := New(false, storeClient)
+	metarepo := New(storeClient)
 
 	metarepo.DeleteMapping("/")
 	metarepo.DeleteData("/")
@@ -294,7 +300,7 @@ func TestMetarepoRoot(t *testing.T) {
 	storeClient, err := backends.New(config)
 	assert.NoError(t, err)
 
-	metarepo := New(false, storeClient)
+	metarepo := New(storeClient)
 
 	metarepo.DeleteMapping("/")
 	metarepo.DeleteData("/")
@@ -305,6 +311,14 @@ func TestMetarepoRoot(t *testing.T) {
 	time.Sleep(sleepTime)
 
 	ip := "192.168.1.0"
+
+	accessRule := map[string][]store.AccessRule{
+		ip: {
+			{Path: "/", Mode: store.AccessModeRead},
+		},
+	}
+	metarepo.PutAccessRule(accessRule)
+
 	mapping := make(map[string]interface{})
 	mapping["node"] = "/nodes/0"
 	err = metarepo.PutMapping(ip, mapping, true)
@@ -319,14 +333,6 @@ func TestMetarepoRoot(t *testing.T) {
 	selfVal := mapVal["self"]
 	assert.NotNil(t, selfVal)
 	assert.True(t, len(mapVal) > 1)
-
-	metarepo.SetOnlySelf(true)
-
-	_, val = metarepo.Root(ip, "/")
-	mapVal = val.(map[string]interface{})
-	selfVal = mapVal["self"]
-	assert.NotNil(t, selfVal)
-	assert.True(t, len(mapVal) == 1)
 
 	metarepo.DeleteData("/")
 	metarepo.DeleteMapping("/")
@@ -347,7 +353,7 @@ func TestWatch(t *testing.T) {
 	storeClient, err := backends.New(config)
 	assert.NoError(t, err)
 
-	metarepo := New(false, storeClient)
+	metarepo := New(storeClient)
 	metarepo.DeleteMapping("/")
 	metarepo.DeleteData("/")
 
@@ -420,7 +426,7 @@ func TestWatchSelf(t *testing.T) {
 	storeClient, err := backends.New(config)
 	assert.NoError(t, err)
 
-	metarepo := New(false, storeClient)
+	metarepo := New(storeClient)
 	metarepo.DeleteMapping("/")
 	metarepo.DeleteData("/")
 
@@ -504,7 +510,7 @@ func TestWatchCloseChan(t *testing.T) {
 	storeClient, err := backends.New(config)
 	assert.NoError(t, err)
 
-	metarepo := New(false, storeClient)
+	metarepo := New(storeClient)
 
 	metarepo.StartSync()
 
@@ -560,7 +566,7 @@ func TestSelfWatchNodeNotExist(t *testing.T) {
 	storeClient, err := backends.New(config)
 	assert.NoError(t, err)
 
-	metarepo := New(false, storeClient)
+	metarepo := New(storeClient)
 
 	metarepo.StartSync()
 

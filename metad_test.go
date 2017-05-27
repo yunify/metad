@@ -211,6 +211,8 @@ func TestMetadWatch(t *testing.T) {
 	metad.Init()
 
 	defer metad.Stop()
+	ip := "192.168.1.1"
+	remoteAddr := ip + ":1234"
 
 	dataJson := `
 	{
@@ -230,12 +232,21 @@ func TestMetadWatch(t *testing.T) {
 	metad.manageRouter.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
 
+	ruleJson := `
+	{"192.168.1.1":[{"path":"/","mode":1}]
+	}
+	`
+	req = httptest.NewRequest("PUT", "/v1/rule/", strings.NewReader(ruleJson))
+	w = httptest.NewRecorder()
+	metad.manageRouter.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
+
 	time.Sleep(sleepTime)
 	versions := make(chan int, 1)
 	go func() {
 		req := httptest.NewRequest("GET", "/nodes/1/ip?wait=true", nil)
 		req.Header.Set("accept", "application/json")
-
+		req.RemoteAddr = remoteAddr
 		w := httptest.NewRecorder()
 		metad.router.ServeHTTP(w, req)
 		assert.Equal(t, 200, w.Code)
@@ -262,6 +273,7 @@ func TestMetadWatch(t *testing.T) {
 	//wait with prev_version should return immediately
 	req = httptest.NewRequest("GET", fmt.Sprintf("/nodes/1/ip?wait=true&prev_version=%d", v), nil)
 	req.Header.Set("accept", "application/json")
+	req.RemoteAddr = remoteAddr
 	w = httptest.NewRecorder()
 	metad.router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)

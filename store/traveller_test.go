@@ -55,7 +55,7 @@ func TestTravellerEnter(t *testing.T) {
 		},
 	}
 
-	traveller := s.Traveller(accessRules)
+	traveller := s.Traveller(NewAccessTree(accessRules))
 	defer traveller.Close()
 	assert.True(t, traveller.Enter("/clusters"))
 	assert.True(t, traveller.Enter("/cl-1/env"))
@@ -113,7 +113,7 @@ func TestTraveller(t *testing.T) {
 			Mode: AccessModeRead,
 		},
 	}
-	traveller := s.Traveller(accessRules)
+	traveller := s.Traveller(NewAccessTree(accessRules))
 	defer traveller.Close()
 
 	nodeTraveller := traveller.(*nodeTraveller)

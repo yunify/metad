@@ -23,6 +23,7 @@ import (
 	"github.com/yunify/metad/backends"
 	"github.com/yunify/metad/log"
 	"github.com/yunify/metad/metadata"
+	"github.com/yunify/metad/store"
 	"github.com/yunify/metad/util/flatmap"
 	yaml "gopkg.in/yaml.v2"
 )
@@ -84,7 +85,7 @@ func New(config *Config) (*Metad, error) {
 		return nil, err
 	}
 
-	metadataRepo := metadata.New(config.OnlySelf, storeClient)
+	metadataRepo := metadata.New(storeClient)
 	return &Metad{config: config, metadataRepo: metadataRepo, router: mux.NewRouter(), manageRouter: mux.NewRouter()}, nil
 }
 
@@ -138,6 +139,11 @@ func (m *Metad) initManageRouter() {
 	data.HandleFunc("/{nodePath:.*}", m.manageWrapper(m.dataGet)).Methods("GET")
 	data.HandleFunc("/{nodePath:.*}", m.manageWrapper(m.dataUpdate)).Methods("POST", "PUT")
 	data.HandleFunc("/{nodePath:.*}", m.manageWrapper(m.dataDelete)).Methods("DELETE")
+
+	rule := v1.PathPrefix("/rule").Subrouter()
+	rule.HandleFunc("/", m.manageWrapper(m.accessRuleGet)).Methods("GET")
+	rule.HandleFunc("/", m.manageWrapper(m.accessRuleUpdate)).Methods("POST", "PUT")
+	rule.HandleFunc("/", m.manageWrapper(m.accessRuleDelete)).Methods("DELETE")
 }
 
 func (m *Metad) Serve() {
@@ -297,6 +303,33 @@ func (m *Metad) mappingDelete(ctx context.Context, req *http.Request) (interface
 	} else {
 		return nil, nil
 	}
+}
+
+func (m *Metad) accessRuleGet(ctx context.Context, req *http.Request) (interface{}, *HttpError) {
+	return nil, nil
+}
+
+func (m *Metad) accessRuleUpdate(ctx context.Context, req *http.Request) (interface{}, *HttpError) {
+	decoder := json.NewDecoder(req.Body)
+	var data map[string][]store.AccessRule
+	err := decoder.Decode(&data)
+	if err != nil {
+		return nil, NewHttpError(http.StatusBadRequest, fmt.Sprintf("invalid json format, error:%s", err.Error()))
+	} else {
+		err = m.metadataRepo.PutAccessRule(data)
+		if err != nil {
+			if log.IsDebugEnable() {
+				log.Debug("accessRuleUpdate data:%v, error:%s", data, err.Error())
+			}
+			return nil, NewServerError(err)
+		} else {
+			return nil, nil
+		}
+	}
+}
+
+func (m *Metad) accessRuleDelete(ctx context.Context, req *http.Request) (interface{}, *HttpError) {
+	return nil, nil
 }
 
 func contentType(req *http.Request) int {

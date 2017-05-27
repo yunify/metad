@@ -33,7 +33,7 @@ type Store interface {
 	// Destroy the store
 	Destroy()
 	// Traveller
-	Traveller(rules []AccessRule) Traveller
+	Traveller(accessTree *AccessTree) Traveller
 }
 
 type store struct {
@@ -181,8 +181,8 @@ func (s *store) Destroy() {
 	s.Root = nil
 }
 
-func (s *store) Traveller(rules []AccessRule) Traveller {
-	return newTraveller(s, rules)
+func (s *store) Traveller(accessTree *AccessTree) Traveller {
+	return newTraveller(s, accessTree)
 }
 
 // walk walks all the nodePath and apply the walkFunc on each directory

@@ -1,23 +1,8 @@
 package store
 
 import (
-	"encoding/json"
 	"strings"
 )
-
-type AccessMode int
-type EnterResult int
-
-const (
-	AccessModeNil       = AccessMode(-1)
-	AccessModeForbidden = AccessMode(0)
-	AccessModeRead      = AccessMode(1)
-)
-
-type AccessRule struct {
-	Path string
-	Mode AccessMode
-}
 
 type Traveller interface {
 	// Enter path's node, return is success.
@@ -36,72 +21,8 @@ type Traveller interface {
 	GetVersion() int64
 }
 
-type accessNode struct {
-	Name     string
-	Mode     AccessMode
-	parent   *accessNode
-	Children []*accessNode
-}
-
-func (n *accessNode) HasChildren() bool {
-	return len(n.Children) > 0
-}
-
-func (n *accessNode) GetChildren(name string, strict bool) *accessNode {
-	var wildcardNode *accessNode
-	for _, c := range n.Children {
-		if name == c.Name {
-			return c
-		}
-		if !strict && c.Name == "*" {
-			wildcardNode = c
-		}
-	}
-	return wildcardNode
-}
-
-type accessTree struct {
-	root *accessNode
-}
-
-func (t *accessTree) Json() string {
-	b, _ := json.MarshalIndent(t.root, "", "  ")
-	return string(b)
-}
-
-func newAccessTree(rules []AccessRule) *accessTree {
-	root := &accessNode{
-		Name:   "/",
-		Mode:   AccessModeNil,
-		parent: nil,
-	}
-	tree := &accessTree{
-		root: root,
-	}
-	for _, rule := range rules {
-		p := rule.Path
-		curr := root
-		if p != "/" {
-			components := strings.Split(p, "/")
-			for _, component := range components {
-				if component == "" {
-					continue
-				}
-				child := curr.GetChildren(component, true)
-				if child == nil {
-					child = &accessNode{Name: component, Mode: AccessModeNil, parent: curr}
-					curr.Children = append(curr.Children, child)
-				}
-				curr = child
-			}
-		}
-		curr.Mode = rule.Mode
-	}
-	return tree
-}
-
 type stackElement struct {
-	node *accessNode
+	node *AccessNode
 	mode AccessMode
 }
 
@@ -129,17 +50,16 @@ func (s *travellerStack) Clean() {
 
 type nodeTraveller struct {
 	store          *store
-	access         *accessTree
+	access         *AccessTree
 	currNode       *node
-	currAccessNode *accessNode
+	currAccessNode *AccessNode
 	currMode       AccessMode
 	stack          travellerStack
 }
 
-func newTraveller(store *store, rules []AccessRule) Traveller {
-	accessTree := newAccessTree(rules)
+func newTraveller(store *store, accessTree *AccessTree) Traveller {
 	store.worldLock.RLock()
-	return &nodeTraveller{store: store, access: accessTree, currNode: store.Root, currAccessNode: accessTree.root, currMode: accessTree.root.Mode}
+	return &nodeTraveller{store: store, access: accessTree, currNode: store.Root, currAccessNode: accessTree.Root, currMode: accessTree.Root.Mode}
 }
 
 func (t *nodeTraveller) Enter(path string) bool {
@@ -173,7 +93,7 @@ func (t *nodeTraveller) enter(node string) bool {
 	if n == nil {
 		return false
 	}
-	var an *accessNode
+	var an *AccessNode
 	if t.currAccessNode != nil {
 		an = t.currAccessNode.GetChildren(node, false)
 	}
@@ -229,7 +149,7 @@ func (t *nodeTraveller) BackToRoot() {
 	}
 	t.stack.Clean()
 	t.currNode = t.store.Root
-	t.currAccessNode = t.access.root
+	t.currAccessNode = t.access.Root
 	t.currMode = t.currAccessNode.Mode
 }
 
@@ -268,13 +188,13 @@ func (t *nodeTraveller) GetVersion() int64 {
 	return t.store.Version()
 }
 
-func (t *nodeTraveller) Close(){
+func (t *nodeTraveller) Close() {
 	if t.store == nil {
 		panic("illegal status: access a closed traveller.")
 	}
-	t.store = nil
 	t.access = nil
 	t.currAccessNode = nil
 	t.currNode = nil
 	t.store.worldLock.RUnlock()
+	t.store = nil
 }
