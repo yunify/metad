@@ -30,6 +30,10 @@ type Traveller interface {
 	BackToRoot()
 	// GetValue get current node value, if node is dir, will return a map contains children's value, otherwise return node.Value
 	GetValue() interface{}
+	// Close release traveller
+	Close()
+	// GetVersion get store version.
+	GetVersion() int64
 }
 
 type accessNode struct {
@@ -134,10 +138,14 @@ type nodeTraveller struct {
 
 func newTraveller(store *store, rules []AccessRule) Traveller {
 	accessTree := newAccessTree(rules)
+	store.worldLock.RLock()
 	return &nodeTraveller{store: store, access: accessTree, currNode: store.Root, currAccessNode: accessTree.root, currMode: accessTree.root.Mode}
 }
 
 func (t *nodeTraveller) Enter(path string) bool {
+	if t.store == nil {
+		panic("illegal status: access a closed traveller.")
+	}
 	if path == "/" {
 		return t.enter(path)
 	} else {
@@ -194,6 +202,9 @@ func (t *nodeTraveller) enter(node string) bool {
 }
 
 func (t *nodeTraveller) Back() {
+	if t.store == nil {
+		panic("illegal status: access a closed traveller.")
+	}
 	if t.currNode.IsRoot() {
 		panic("illegal status")
 	}
@@ -213,6 +224,9 @@ func (t *nodeTraveller) BackStep(step int) {
 }
 
 func (t *nodeTraveller) BackToRoot() {
+	if t.store == nil {
+		panic("illegal status: access a closed traveller.")
+	}
 	t.stack.Clean()
 	t.currNode = t.store.Root
 	t.currAccessNode = t.access.root
@@ -220,6 +234,9 @@ func (t *nodeTraveller) BackToRoot() {
 }
 
 func (t *nodeTraveller) GetValue() interface{} {
+	if t.store == nil {
+		panic("illegal status: access a closed traveller.")
+	}
 	if t.currNode == nil {
 		panic("illegal status.")
 	}
@@ -242,4 +259,22 @@ func (t *nodeTraveller) GetValue() interface{} {
 	} else {
 		return t.currNode.Value
 	}
+}
+
+func (t *nodeTraveller) GetVersion() int64 {
+	if t.store == nil {
+		panic("illegal status: access a closed traveller.")
+	}
+	return t.store.Version()
+}
+
+func (t *nodeTraveller) Close(){
+	if t.store == nil {
+		panic("illegal status: access a closed traveller.")
+	}
+	t.store = nil
+	t.access = nil
+	t.currAccessNode = nil
+	t.currNode = nil
+	t.store.worldLock.RUnlock()
 }

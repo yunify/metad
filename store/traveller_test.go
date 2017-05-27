@@ -56,6 +56,7 @@ func TestTravellerEnter(t *testing.T) {
 	}
 
 	traveller := s.Traveller(accessRules)
+	defer traveller.Close()
 	assert.True(t, traveller.Enter("/clusters"))
 	assert.True(t, traveller.Enter("/cl-1/env"))
 	assert.True(t, traveller.Enter("name"))
@@ -69,6 +70,7 @@ func TestTravellerEnter(t *testing.T) {
 
 	traveller.BackToRoot()
 	assert.True(t, traveller.Enter("/"))
+
 }
 
 func TestTraveller(t *testing.T) {
@@ -112,6 +114,8 @@ func TestTraveller(t *testing.T) {
 		},
 	}
 	traveller := s.Traveller(accessRules)
+	defer traveller.Close()
+
 	nodeTraveller := traveller.(*nodeTraveller)
 	fmt.Println(nodeTraveller.access.Json())
 
