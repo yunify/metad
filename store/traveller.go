@@ -20,36 +20,31 @@ type AccessRule struct {
 }
 
 type Traveller interface {
-	// can Enter node
-	Enter(node string) bool
-	// Back to parent dir
+	// Enter path's node, return is success.
+	Enter(path string) bool
+	// Back to parent node
 	Back()
-
+	// BackStep back multi step
+	BackStep(step int)
+	// Back to root node
+	BackToRoot()
+	// GetValue get current node value, if node is dir, will return a map contains children's value, otherwise return node.Value
 	GetValue() interface{}
 }
 
-type pathTree struct {
-	root *pathNode
-}
-
-func (t *pathTree) Json() string {
-	b, _ := json.MarshalIndent(t.root, "", "  ")
-	return string(b)
-}
-
-type pathNode struct {
+type accessNode struct {
 	Name     string
 	Mode     AccessMode
-	parent   *pathNode
-	Children []*pathNode
+	parent   *accessNode
+	Children []*accessNode
 }
 
-func (n *pathNode) HasChildren() bool {
+func (n *accessNode) HasChildren() bool {
 	return len(n.Children) > 0
 }
 
-func (n *pathNode) GetChildren(name string, strict bool) *pathNode {
-	var wildcardNode *pathNode
+func (n *accessNode) GetChildren(name string, strict bool) *accessNode {
+	var wildcardNode *accessNode
 	for _, c := range n.Children {
 		if name == c.Name {
 			return c
@@ -61,17 +56,22 @@ func (n *pathNode) GetChildren(name string, strict bool) *pathNode {
 	return wildcardNode
 }
 
-func newNodeTraveller(store *store, rules []AccessRule) Traveller {
-	return &nodeTraveller{store: store, tree: buildPathTree(rules)}
+type accessTree struct {
+	root *accessNode
 }
 
-func buildPathTree(rules []AccessRule) *pathTree {
-	root := &pathNode{
+func (t *accessTree) Json() string {
+	b, _ := json.MarshalIndent(t.root, "", "  ")
+	return string(b)
+}
+
+func newAccessTree(rules []AccessRule) *accessTree {
+	root := &accessNode{
 		Name:   "/",
 		Mode:   AccessModeNil,
 		parent: nil,
 	}
-	tree := &pathTree{
+	tree := &accessTree{
 		root: root,
 	}
 	for _, rule := range rules {
@@ -85,7 +85,7 @@ func buildPathTree(rules []AccessRule) *pathTree {
 				}
 				child := curr.GetChildren(component, true)
 				if child == nil {
-					child = &pathNode{Name: component, Mode: AccessModeNil, parent: curr}
+					child = &accessNode{Name: component, Mode: AccessModeNil, parent: curr}
 					curr.Children = append(curr.Children, child)
 				}
 				curr = child
@@ -97,19 +97,19 @@ func buildPathTree(rules []AccessRule) *pathTree {
 }
 
 type stackElement struct {
-	pathNode *pathNode
-	mode     AccessMode
+	node *accessNode
+	mode AccessMode
 }
 
 type travellerStack struct {
-	backend []interface{}
+	backend []*stackElement
 }
 
-func (s *travellerStack) Push(v interface{}) {
+func (s *travellerStack) Push(v *stackElement) {
 	s.backend = append(s.backend, v)
 }
 
-func (s *travellerStack) Pop() interface{} {
+func (s *travellerStack) Pop() *stackElement {
 	l := len(s.backend)
 	if l == 0 {
 		return nil
@@ -119,45 +119,60 @@ func (s *travellerStack) Pop() interface{} {
 	return e
 }
 
-type nodeTraveller struct {
-	store        *store
-	tree         *pathTree
-	currNode     *node
-	currPathNode *pathNode
-	currMode     AccessMode
-	stack        travellerStack
+func (s *travellerStack) Clean() {
+	s.backend = []*stackElement{}
 }
 
-func (t *nodeTraveller) Enter(dir string) bool {
-	if dir == "/" {
-		if t.currNode == nil {
-			t.stack.Push(&stackElement{pathNode: t.currPathNode, mode: t.currMode})
-			t.currNode = t.store.Root
-			t.currPathNode = t.tree.root
-			t.currMode = t.currPathNode.Mode
-			return true
+type nodeTraveller struct {
+	store          *store
+	access         *accessTree
+	currNode       *node
+	currAccessNode *accessNode
+	currMode       AccessMode
+	stack          travellerStack
+}
+
+func newTraveller(store *store, rules []AccessRule) Traveller {
+	accessTree := newAccessTree(rules)
+	return &nodeTraveller{store: store, access: accessTree, currNode: store.Root, currAccessNode: accessTree.root, currMode: accessTree.root.Mode}
+}
+
+func (t *nodeTraveller) Enter(path string) bool {
+	if path == "/" {
+		return t.enter(path)
+	} else {
+		components := strings.Split(path, "/")
+		step := 0
+		for _, component := range components {
+			if component == "" {
+				continue
+			}
+			if !t.enter(component) {
+				t.BackStep(step)
+				return false
+			}
+			step = step + 1
 		}
-		return false
+		return true
 	}
-	if t.currNode == nil {
-		return false
+}
+
+func (t *nodeTraveller) enter(node string) bool {
+	if node == "/" {
+		return true
 	}
-	n := t.currNode.GetChild(dir)
+	n := t.currNode.GetChild(node)
 	if n == nil {
 		return false
 	}
-	//if !n.IsDir() {
-	//	return EnterNotDir
-	//}
-
-	var p *pathNode
-	if t.currPathNode != nil {
-		p = t.currPathNode.GetChildren(dir, false)
+	var an *accessNode
+	if t.currAccessNode != nil {
+		an = t.currAccessNode.GetChildren(node, false)
 	}
 	result := false
-	if p != nil {
-		// if p HasChildren, means exist other rule for future access
-		if p.HasChildren() || p.Mode >= AccessModeRead {
+	if an != nil {
+		// if an HasChildren, means exist other rule for future access
+		if an.HasChildren() || an.Mode >= AccessModeRead {
 			result = true
 		}
 	} else {
@@ -167,11 +182,11 @@ func (t *nodeTraveller) Enter(dir string) bool {
 	}
 
 	if result {
-		t.stack.Push(&stackElement{pathNode: t.currPathNode, mode: t.currMode})
+		t.stack.Push(&stackElement{node: t.currAccessNode, mode: t.currMode})
 		t.currNode = n
-		t.currPathNode = p
-		if t.currPathNode != nil && t.currPathNode.Mode != AccessModeNil {
-			t.currMode = t.currPathNode.Mode
+		t.currAccessNode = an
+		if t.currAccessNode != nil && t.currAccessNode.Mode != AccessModeNil {
+			t.currMode = t.currAccessNode.Mode
 		}
 
 	}
@@ -179,17 +194,29 @@ func (t *nodeTraveller) Enter(dir string) bool {
 }
 
 func (t *nodeTraveller) Back() {
-	if t.currNode == nil || t.currNode.IsRoot() {
+	if t.currNode.IsRoot() {
 		panic("illegal status")
 	}
 	e := t.stack.Pop()
 	if e == nil {
 		panic("illegal status")
 	}
-	ele := e.(*stackElement)
 	t.currNode = t.currNode.parent
-	t.currMode = ele.mode
-	t.currPathNode = ele.pathNode
+	t.currMode = e.mode
+	t.currAccessNode = e.node
+}
+
+func (t *nodeTraveller) BackStep(step int) {
+	for i := 0; i < step; i++ {
+		t.Back()
+	}
+}
+
+func (t *nodeTraveller) BackToRoot() {
+	t.stack.Clean()
+	t.currNode = t.store.Root
+	t.currAccessNode = t.access.root
+	t.currMode = t.currAccessNode.Mode
 }
 
 func (t *nodeTraveller) GetValue() interface{} {
@@ -199,8 +226,7 @@ func (t *nodeTraveller) GetValue() interface{} {
 	if t.currNode.IsDir() {
 		values := make(map[string]interface{})
 		for k, node := range t.currNode.Children {
-			eresult := t.Enter(node.Name)
-			if !eresult {
+			if !t.Enter(node.Name) {
 				continue
 			}
 			v := t.GetValue()

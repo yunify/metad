@@ -182,7 +182,7 @@ func (s *store) Destroy() {
 }
 
 func (s *store) Traveller(rules []AccessRule) Traveller {
-	return newNodeTraveller(s, rules)
+	return newTraveller(s, rules)
 }
 
 // walk walks all the nodePath and apply the walkFunc on each directory
