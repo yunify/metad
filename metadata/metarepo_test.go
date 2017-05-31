@@ -41,11 +41,6 @@ func TestMetarepoData(t *testing.T) {
 	metarepo := New(storeClient)
 	metarepo.DeleteData("/")
 
-	metarepo.StartSync()
-
-	testData := FillTestData(metarepo)
-	time.Sleep(sleepTime)
-	ValidTestData(t, testData, metarepo.data)
 	clientIP := "192.168.0.1"
 	accessRule := map[string][]store.AccessRule{
 		clientIP: {
@@ -53,6 +48,13 @@ func TestMetarepoData(t *testing.T) {
 		},
 	}
 	metarepo.PutAccessRule(accessRule)
+
+	metarepo.StartSync()
+
+	testData := FillTestData(metarepo)
+	time.Sleep(sleepTime)
+	ValidTestData(t, testData, metarepo.data)
+
 	_, val := metarepo.Root(clientIP, "/nodes/0")
 	assert.NotNil(t, val)
 

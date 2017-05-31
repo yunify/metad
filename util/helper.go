@@ -3,6 +3,7 @@ package util
 import (
 	"github.com/yunify/metad/util/flatmap"
 	"path"
+	"strconv"
 	"strings"
 )
 
@@ -46,4 +47,15 @@ func GetMapValue(m interface{}, nodePath string) string {
 	fm := flatmap.Flatten(m)
 	v := fm[nodePath]
 	return v
+}
+
+func ParseInt(value string, defaultValue int) int {
+	if value == "" {
+		return defaultValue
+	}
+	result, err := strconv.Atoi(value)
+	if err != nil {
+		result = defaultValue
+	}
+	return result
 }

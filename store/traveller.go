@@ -50,16 +50,17 @@ func (s *travellerStack) Clean() {
 
 type nodeTraveller struct {
 	store          *store
-	access         *AccessTree
+	access         AccessTree
 	currNode       *node
 	currAccessNode *AccessNode
 	currMode       AccessMode
 	stack          travellerStack
 }
 
-func newTraveller(store *store, accessTree *AccessTree) Traveller {
+func newTraveller(store *store, accessTree AccessTree) Traveller {
 	store.worldLock.RLock()
-	return &nodeTraveller{store: store, access: accessTree, currNode: store.Root, currAccessNode: accessTree.Root, currMode: accessTree.Root.Mode}
+	currAccessNode := accessTree.GetRoot()
+	return &nodeTraveller{store: store, access: accessTree, currNode: store.Root, currAccessNode: currAccessNode, currMode: currAccessNode.Mode}
 }
 
 func (t *nodeTraveller) Enter(path string) bool {
@@ -95,12 +96,12 @@ func (t *nodeTraveller) enter(node string) bool {
 	}
 	var an *AccessNode
 	if t.currAccessNode != nil {
-		an = t.currAccessNode.GetChildren(node, false)
+		an = t.currAccessNode.GetChild(node, false)
 	}
 	result := false
 	if an != nil {
-		// if an HasChildren, means exist other rule for future access
-		if an.HasChildren() || an.Mode >= AccessModeRead {
+		// if an HasChild, means exist other rule for future access
+		if an.HasChild() || an.Mode >= AccessModeRead {
 			result = true
 		}
 	} else {
@@ -149,7 +150,7 @@ func (t *nodeTraveller) BackToRoot() {
 	}
 	t.stack.Clean()
 	t.currNode = t.store.Root
-	t.currAccessNode = t.access.Root
+	t.currAccessNode = t.access.GetRoot()
 	t.currMode = t.currAccessNode.Mode
 }
 

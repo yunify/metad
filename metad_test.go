@@ -436,6 +436,89 @@ func TestMetadMappingDelete(t *testing.T) {
 	getAndCheckMapping(metad, t, ip, false)
 }
 
+func TestMetadAccessRule(t *testing.T) {
+	config := &Config{
+		Backend: testBackend,
+	}
+	metad, err := New(config)
+	assert.NoError(t, err)
+
+	metad.Init()
+
+	defer metad.Stop()
+
+	data := map[string]interface{}{
+		"clusters": map[string]interface{}{
+			"cl-1": map[string]interface{}{
+				"name": "cl-1",
+				"env": map[string]interface{}{
+					"username": "user1",
+					"secret":   "123456",
+				},
+				"public_key": "public_key_val",
+			},
+			"cl-2": map[string]interface{}{
+				"name": "cl-2",
+				"env": map[string]interface{}{
+					"username": "user2",
+					"secret":   "1234567",
+				},
+				"public_key": "public_key_val2",
+			},
+		},
+	}
+
+	b, _ := json.Marshal(data)
+	dataJson := string(b)
+	req := httptest.NewRequest("PUT", "/v1/data/", strings.NewReader(dataJson))
+	w := httptest.NewRecorder()
+	metad.manageRouter.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
+	mappingJson := `
+	{"192.168.1.1":{"cluster":"/clusters/cl-1", "links":{"c2":"/clusters/cl-2"}},
+	"192.168.1.2":{"cluster":"/clusters/cl-2"}}`
+	req = httptest.NewRequest("POST", "/v1/mapping", strings.NewReader(mappingJson))
+	w = httptest.NewRecorder()
+	metad.manageRouter.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
+
+	ruleJson := `
+	{"192.168.1.1":[{"path":"/","mode":0}, {"path":"/clusters/*/env","mode":0},{"path":"/clusters/cl-1","mode":1}, {"path":"/clusters/cl-2","mode":1}, {"path":"/clusters/cl-2/env/secret","mode":0}],
+	"192.168.1.2":[{"path":"/","mode":0}, {"path":"/clusters/*/env","mode":0},{"path":"/clusters/cl-2","mode":1}]
+	}
+	`
+	req = httptest.NewRequest("POST", "/v1/rule", strings.NewReader(ruleJson))
+	w = httptest.NewRecorder()
+	metad.manageRouter.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
+
+	time.Sleep(sleepTime)
+
+	req = httptest.NewRequest("GET", "/", nil)
+	req.RemoteAddr = "192.168.1.1:1234"
+	req.Header.Set("accept", "application/json")
+	w = httptest.NewRecorder()
+	metad.router.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
+	assert.Equal(t, "cl-1", util.GetMapValue(parse(w), "/self/cluster/name"))
+	// node1 can access cl-2
+	assert.Equal(t, "cl-2", util.GetMapValue(parse(w), "/clusters/cl-2/name"))
+	assert.Equal(t, "user2", util.GetMapValue(parse(w), "/self/links/c2/env/username"))
+	//can not access cl-2 env/secret
+	assert.Equal(t, "", util.GetMapValue(parse(w), "/self/links/c2/env/secret"))
+
+	req = httptest.NewRequest("GET", "/", nil)
+	req.RemoteAddr = "192.168.1.2:1234"
+	req.Header.Set("accept", "application/json")
+	w = httptest.NewRecorder()
+	metad.router.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
+	assert.Equal(t, "cl-2", util.GetMapValue(parse(w), "/self/cluster/name"))
+	assert.Equal(t, "1234567", util.GetMapValue(parse(w), "/self/cluster/env/secret"))
+	// node2 can not access cl-1
+	assert.Equal(t, "", util.GetMapValue(parse(w), "/clusters/cl-1/name"))
+}
+
 func getAndCheckMapping(metad *Metad, t *testing.T, ip string, exist bool) {
 	req := httptest.NewRequest("GET", "/v1/mapping", nil)
 	req.Header.Set("Accept", "application/json")

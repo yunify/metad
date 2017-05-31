@@ -19,24 +19,26 @@ import (
 const DEFAULT_WATCH_BUF_LEN = 100
 
 type MetadataRepo struct {
-	mapping         store.Store
-	storeClient     backends.StoreClient
-	data            store.Store
-	accessTrees     map[string]*store.AccessTree
-	metaStopChan    chan bool
-	mappingStopChan chan bool
-	timerPool       *util.TimerPool
+	mapping            store.Store
+	storeClient        backends.StoreClient
+	data               store.Store
+	accessStore        store.AccessStore
+	metaStopChan       chan bool
+	mappingStopChan    chan bool
+	accessRuleStopChan chan bool
+	timerPool          *util.TimerPool
 }
 
 func New(storeClient backends.StoreClient) *MetadataRepo {
 	metadataRepo := MetadataRepo{
-		mapping:         store.New(),
-		storeClient:     storeClient,
-		data:            store.New(),
-		accessTrees:     make(map[string]*store.AccessTree),
-		metaStopChan:    make(chan bool),
-		mappingStopChan: make(chan bool),
-		timerPool:       util.NewTimerPool(100 * time.Millisecond),
+		mapping:            store.New(),
+		storeClient:        storeClient,
+		data:               store.New(),
+		accessStore:        store.NewAccessStore(),
+		metaStopChan:       make(chan bool),
+		mappingStopChan:    make(chan bool),
+		accessRuleStopChan: make(chan bool),
+		timerPool:          util.NewTimerPool(100 * time.Millisecond),
 	}
 	return &metadataRepo
 }
@@ -45,6 +47,7 @@ func (r *MetadataRepo) StartSync() {
 	log.Info("Start Sync")
 	r.startMetaSync()
 	r.startMappingSync()
+	r.startAccessRuleSync()
 }
 
 func (r *MetadataRepo) startMetaSync() {
@@ -55,18 +58,23 @@ func (r *MetadataRepo) startMappingSync() {
 	r.storeClient.SyncMapping(r.mapping, r.mappingStopChan)
 }
 
+func (r *MetadataRepo) startAccessRuleSync() {
+	r.storeClient.SyncAccessRule(r.accessStore, r.accessRuleStopChan)
+}
+
 func (r *MetadataRepo) StopSync() {
 	log.Info("Stop Sync")
 	r.metaStopChan <- true
 	r.mappingStopChan <- true
+	r.accessRuleStopChan <- true
 	time.Sleep(1 * time.Second)
 	r.data.Destroy()
 	time.Sleep(1 * time.Second)
 	r.mapping.Destroy()
 }
 
-func (r *MetadataRepo) getAccessTree(clientIP string) *store.AccessTree {
-	accessTree := r.accessTrees[clientIP]
+func (r *MetadataRepo) getAccessTree(clientIP string) store.AccessTree {
+	accessTree := r.accessStore.Get(clientIP)
 	//for compatible with old version, auto convert mapping to AccessRule
 	if accessTree == nil {
 		mappingData := r.GetMapping(path.Join("/", clientIP))
@@ -430,18 +438,21 @@ func (r *MetadataRepo) DataVersion() int64 {
 }
 
 func (r *MetadataRepo) PutAccessRule(rulesMap map[string][]store.AccessRule) error {
-	for host, rules := range rulesMap {
-		r.accessTrees[host] = store.NewAccessTree(rules)
+	for _, v := range rulesMap {
+		err := store.CheckAccessRules(v)
+		if err != nil {
+			return err
+		}
 	}
-	return nil
+	return r.storeClient.PutAccessRule(rulesMap)
 }
 
-func (r *MetadataRepo) DeleteAccessRule(host string) {
-	delete(r.accessTrees, host)
+func (r *MetadataRepo) DeleteAccessRule(hosts []string) error {
+	return r.storeClient.DeleteAccessRule(hosts)
 }
 
-func (r *MetadataRepo) GetAccessRule(host string) map[string][]store.AccessRule {
-	return nil
+func (r *MetadataRepo) GetAccessRule(hosts []string) map[string][]store.AccessRule {
+	return r.accessStore.GetAccessRule(hosts)
 }
 
 func checkSubs(subs []string) error {

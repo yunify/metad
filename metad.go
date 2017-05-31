@@ -140,6 +140,10 @@ func (m *Metad) initManageRouter() {
 	data.HandleFunc("/{nodePath:.*}", m.manageWrapper(m.dataUpdate)).Methods("POST", "PUT")
 	data.HandleFunc("/{nodePath:.*}", m.manageWrapper(m.dataDelete)).Methods("DELETE")
 
+	v1.HandleFunc("/rule", m.manageWrapper(m.accessRuleGet)).Methods("GET")
+	v1.HandleFunc("/rule", m.manageWrapper(m.accessRuleUpdate)).Methods("POST", "PUT")
+	v1.HandleFunc("/rule", m.manageWrapper(m.accessRuleDelete)).Methods("DELETE")
+
 	rule := v1.PathPrefix("/rule").Subrouter()
 	rule.HandleFunc("/", m.manageWrapper(m.accessRuleGet)).Methods("GET")
 	rule.HandleFunc("/", m.manageWrapper(m.accessRuleUpdate)).Methods("POST", "PUT")
@@ -306,7 +310,10 @@ func (m *Metad) mappingDelete(ctx context.Context, req *http.Request) (interface
 }
 
 func (m *Metad) accessRuleGet(ctx context.Context, req *http.Request) (interface{}, *HttpError) {
-	return nil, nil
+	hostsStr := req.FormValue("hosts")
+	hosts := strings.Split(hostsStr, ",")
+	val := m.metadataRepo.GetAccessRule(hosts)
+	return val, nil
 }
 
 func (m *Metad) accessRuleUpdate(ctx context.Context, req *http.Request) (interface{}, *HttpError) {
@@ -329,7 +336,10 @@ func (m *Metad) accessRuleUpdate(ctx context.Context, req *http.Request) (interf
 }
 
 func (m *Metad) accessRuleDelete(ctx context.Context, req *http.Request) (interface{}, *HttpError) {
-	return nil, nil
+	hostsStr := req.FormValue("hosts")
+	hosts := strings.Split(hostsStr, ",")
+	err := m.metadataRepo.DeleteAccessRule(hosts)
+	return nil, NewServerError(err)
 }
 
 func contentType(req *http.Request) int {

@@ -461,6 +461,84 @@ func TestMappingSync(t *testing.T) {
 	}
 }
 
+func TestAccessRule(t *testing.T) {
+	for _, backend := range backendNodes {
+		stopChan := make(chan bool)
+		defer func() {
+			stopChan <- true
+		}()
+		storeClient := NewTestClient(backend)
+
+		accessStore := store.NewAccessStore()
+		storeClient.SyncAccessRule(accessStore, stopChan)
+
+		rules := map[string][]store.AccessRule{
+			"192.168.1.1": {
+				{Path: "/clusters", Mode: store.AccessModeForbidden},
+				{Path: "/clusters/cl-1", Mode: store.AccessModeRead},
+			},
+			"192.168.1.2": {
+				{Path: "/clusters", Mode: store.AccessModeForbidden},
+				{Path: "/clusters/cl-2", Mode: store.AccessModeRead},
+			},
+		}
+		var rulesGet map[string][]store.AccessRule
+		err := storeClient.PutAccessRule(rules)
+		assert.NoError(t, err)
+
+		rulesGet, err = storeClient.GetAccessRule()
+		assert.NoError(t, err)
+		assert.Equal(t, rules, rulesGet)
+
+		time.Sleep(1000 * time.Millisecond)
+		assert.NotNil(t, accessStore.Get("192.168.1.1"))
+
+		err = storeClient.DeleteAccessRule([]string{"192.168.1.2"})
+		assert.NoError(t, err)
+
+		rulesGet, err = storeClient.GetAccessRule()
+		assert.NoError(t, err)
+		_, ok := rulesGet["192.168.1.2"]
+		assert.False(t, ok)
+
+		rules2 := map[string][]store.AccessRule{
+			"192.168.1.3": {
+				{Path: "/clusters", Mode: store.AccessModeForbidden},
+				{Path: "/clusters/cl-3", Mode: store.AccessModeRead},
+			},
+		}
+		err = storeClient.PutAccessRule(rules2)
+		assert.NoError(t, err)
+
+		time.Sleep(1000 * time.Millisecond)
+
+		assert.Nil(t, accessStore.Get("192.168.1.2"))
+		assert.NotNil(t, accessStore.Get("192.168.1.3"))
+
+		err = storeClient.DeleteAccessRule([]string{"192.168.1.1", "192.168.1.2", "192.168.1.3"})
+		assert.NoError(t, err)
+	}
+}
+
+func NewTestClient(backend string) StoreClient {
+	prefix := fmt.Sprintf("/prefix%v", rand.Intn(1000))
+	group := fmt.Sprintf("/group%v", rand.Intn(1000))
+	println("Test backend: ", backend)
+	nodes := GetDefaultBackends(backend)
+
+	config := Config{
+		Backend:      backend,
+		BackendNodes: nodes,
+		Prefix:       prefix,
+		Group:        group,
+	}
+	storeClient, err := New(config)
+	if err != nil {
+		panic(err)
+	}
+	return storeClient
+}
+
 func FillTestData(storeClient StoreClient) map[string]string {
 	testData := make(map[string]interface{})
 	for i := 0; i < 5; i++ {

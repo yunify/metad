@@ -33,7 +33,7 @@ type Store interface {
 	// Destroy the store
 	Destroy()
 	// Traveller
-	Traveller(accessTree *AccessTree) Traveller
+	Traveller(accessTree AccessTree) Traveller
 }
 
 type store struct {
@@ -181,7 +181,7 @@ func (s *store) Destroy() {
 	s.Root = nil
 }
 
-func (s *store) Traveller(accessTree *AccessTree) Traveller {
+func (s *store) Traveller(accessTree AccessTree) Traveller {
 	return newTraveller(s, accessTree)
 }
 

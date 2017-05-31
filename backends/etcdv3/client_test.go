@@ -32,7 +32,7 @@ func TestClientSyncStop(t *testing.T) {
 	metastore := store.New()
 	// expect internalSync not block after stopChan has signal
 	startedChan := make(chan bool)
-	storeClient.internalSync(prefix, metastore, stopChan, startedChan)
+	storeClient.internalSync(prefix, stopChan, startedChan, storeClient.newInitStoreFunc(prefix, metastore), newProcessSyncChangeFunc(metastore))
 	initialized := <-startedChan
 	log.Info(fmt.Sprint("sync status:", initialized))
 
