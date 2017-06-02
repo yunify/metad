@@ -15,6 +15,7 @@ before_install:
 install:
     - "./build"
     - "sudo ./install"
+    - "pushd . ; cd tools && ./build ; popd"
 script:
     - "./test"
 before_deploy:
