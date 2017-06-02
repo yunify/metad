@@ -477,6 +477,13 @@
 			"revisionTime": "2017-04-24T20:45:52Z"
 		},
 		{
+			"checksumSHA1": "SCwAzjyKZDm8DSXgE6ZFmgRCW64=",
+			"path": "github.com/spf13/cobra",
+			"revision": "8d4ce3549a0bf0e3569df3aae7423b7743cd05a9",
+			"revisionTime": "2017-05-30T19:56:48Z",
+			"tree": true
+		},
+		{
 			"checksumSHA1": "EwaJzYLkbxEjHCFf2FoTyEC8Hks=",
 			"path": "github.com/xiang90/probing",
 			"revision": "07dd2e8dfe18522e9c447ba95f2fe95262f63bb2",
@@ -493,6 +500,13 @@
 			"path": "google.golang.org/grpc/examples/helloworld/helloworld",
 			"revision": "277e90a4321cba6ad9f9ca4a832165265002c3a5",
 			"revisionTime": "2017-04-27T17:43:38Z"
+		},
+		{
+			"checksumSHA1": "CL9NBwlXT0R+fOTAsF40zyLcjcA=",
+			"path": "gopkg.in/cheggaaa/pb.v2",
+			"revision": "180c76fdb3025713f501cd481e47810a9c715bd7",
+			"revisionTime": "2017-05-09T22:18:19Z",
+			"tree": true
 		}
 	],
 	"rootPath": "github.com/yunify/metad"
