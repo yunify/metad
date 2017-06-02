@@ -17,7 +17,9 @@ var (
 func makeHttpClients(totalClients uint) []*http.Client {
 	clients := make([]*http.Client, totalClients)
 	for i := range clients {
-		clients[i] = &http.Client{Transport: &http.Transport{}, Timeout: defaultTimeout}
+		transport := &http.Transport{}
+		transport.MaxIdleConnsPerHost = 10000
+		clients[i] = &http.Client{Transport: transport, Timeout: defaultTimeout}
 	}
 	return clients
 }
