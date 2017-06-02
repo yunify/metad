@@ -167,6 +167,9 @@ func (c *Client) PutAccessRule(rules map[string][]store.AccessRule) error {
 
 func (c *Client) DeleteAccessRule(hosts []string) error {
 	for _, host := range hosts {
+		if host == "" {
+			continue
+		}
 		err := c.internalDelete(c.rulePrefix, path.Join("/", host), false)
 		if err != nil {
 			return err

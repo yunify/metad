@@ -465,6 +465,14 @@ func TestMetadAccessRule(t *testing.T) {
 
 	time.Sleep(sleepTime)
 
+	req = httptest.NewRequest("GET", "/v1/rule", nil)
+	req.Header.Set("accept", "application/json")
+	w = httptest.NewRecorder()
+	metad.manageRouter.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
+	assert.Equal(t, "/", util.GetMapValue(parse(w), "/192.168.1.1/0/path"))
+	assert.Equal(t, "1", util.GetMapValue(parse(w), "/192.168.1.1/2/mode"))
+
 	req = httptest.NewRequest("GET", "/", nil)
 	req.RemoteAddr = "192.168.1.1:1234"
 	req.Header.Set("accept", "application/json")
@@ -541,7 +549,7 @@ func parse(w *httptest.ResponseRecorder) interface{} {
 	log.Debug("%s response %s", requestID, w.Body.String())
 	err := json.Unmarshal(w.Body.Bytes(), &result)
 	if err != nil {
-		log.Error("json_err: %s", err.Error())
+		panic(fmt.Errorf("json_err: %s", err.Error()))
 	}
 	return result
 }

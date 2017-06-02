@@ -139,6 +139,9 @@ func (s *accessStore) GetAccessRule(hosts []string) map[string][]AccessRule {
 		}
 	} else {
 		for _, host := range hosts {
+			if host == "" {
+				continue
+			}
 			t, ok := s.m[host]
 			if ok {
 				result[host] = t.ToAccessRule()

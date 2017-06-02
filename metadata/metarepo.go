@@ -448,6 +448,9 @@ func (r *MetadataRepo) PutAccessRule(rulesMap map[string][]store.AccessRule) err
 }
 
 func (r *MetadataRepo) DeleteAccessRule(hosts []string) error {
+	if len(hosts) == 0 {
+		return nil
+	}
 	return r.storeClient.DeleteAccessRule(hosts)
 }
 

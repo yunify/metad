@@ -311,7 +311,10 @@ func (m *Metad) mappingDelete(ctx context.Context, req *http.Request) (interface
 
 func (m *Metad) accessRuleGet(ctx context.Context, req *http.Request) (interface{}, *HttpError) {
 	hostsStr := req.FormValue("hosts")
-	hosts := strings.Split(hostsStr, ",")
+	var hosts []string
+	if hostsStr != "" {
+		hosts = strings.Split(hostsStr, ",")
+	}
 	val := m.metadataRepo.GetAccessRule(hosts)
 	return val, nil
 }
@@ -337,7 +340,10 @@ func (m *Metad) accessRuleUpdate(ctx context.Context, req *http.Request) (interf
 
 func (m *Metad) accessRuleDelete(ctx context.Context, req *http.Request) (interface{}, *HttpError) {
 	hostsStr := req.FormValue("hosts")
-	hosts := strings.Split(hostsStr, ",")
+	var hosts []string
+	if hostsStr != "" {
+		hosts = strings.Split(hostsStr, ",")
+	}
 	err := m.metadataRepo.DeleteAccessRule(hosts)
 	return nil, NewServerError(err)
 }

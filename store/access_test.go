@@ -27,7 +27,7 @@ func TestAccessStore(t *testing.T) {
 	rules1 := rulesGet[ip]
 	assert.Equal(t, rules, rules1)
 
-	rulesGet2 := accessStore.GetAccessRule([]string{})
+	rulesGet2 := accessStore.GetAccessRule(nil)
 	assert.Equal(t, rules, rulesGet2[ip])
 	assert.Equal(t, rules, rulesGet2[ip2])
 
