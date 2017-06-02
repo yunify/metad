@@ -530,6 +530,13 @@
 			"tree": true
 		},
 		{
+			"checksumSHA1": "/OrasVOUsVS3rvS3N5IBpu2bKig=",
+			"path": "gopkg.in/mattn/go-colorable.v0",
+			"revision": "d228849504861217f796da67fae4f6e347643f15",
+			"revisionTime": "2016-11-03T16:00:40Z",
+			"tree": true
+		},
+		{
 			"checksumSHA1": "MqHy6S9EQHAJGdxzVjNVSlbOdPE=",
 			"path": "gopkg.in/mattn/go-isatty.v0",
 			"revision": "fc9e8d8ef48496124e79ae0df75490096eccf6fe",
