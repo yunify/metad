@@ -484,6 +484,13 @@
 			"tree": true
 		},
 		{
+			"checksumSHA1": "43Oxaqga4SdSs/1BHY3tBBKAEWQ=",
+			"path": "github.com/spf13/pflag",
+			"revision": "e57e3eeb33f795204c1ca35f56c44f83227c6e66",
+			"revisionTime": "2017-05-08T18:43:26Z",
+			"tree": true
+		},
+		{
 			"checksumSHA1": "EwaJzYLkbxEjHCFf2FoTyEC8Hks=",
 			"path": "github.com/xiang90/probing",
 			"revision": "07dd2e8dfe18522e9c447ba95f2fe95262f63bb2",
@@ -502,10 +509,38 @@
 			"revisionTime": "2017-04-27T17:43:38Z"
 		},
 		{
+			"checksumSHA1": "bf1oERTv1OruFoyuix5WF3fs/+w=",
+			"path": "gopkg.in/VividCortex/ewma.v1",
+			"revision": "2f8aa9741ab4b5b80945c750b871131b88ef5b7f",
+			"revisionTime": "2013-07-09T16:19:02Z",
+			"tree": true
+		},
+		{
 			"checksumSHA1": "CL9NBwlXT0R+fOTAsF40zyLcjcA=",
 			"path": "gopkg.in/cheggaaa/pb.v2",
 			"revision": "180c76fdb3025713f501cd481e47810a9c715bd7",
 			"revisionTime": "2017-05-09T22:18:19Z",
+			"tree": true
+		},
+		{
+			"checksumSHA1": "8/ytZYAPH/tGXrEhY9omXoDm3Sc=",
+			"path": "gopkg.in/fatih/color.v1",
+			"revision": "570b54cabe6b8eb0bc2dfce68d964677d63b5260",
+			"revisionTime": "2017-05-23T13:53:55Z",
+			"tree": true
+		},
+		{
+			"checksumSHA1": "MqHy6S9EQHAJGdxzVjNVSlbOdPE=",
+			"path": "gopkg.in/mattn/go-isatty.v0",
+			"revision": "fc9e8d8ef48496124e79ae0df75490096eccf6fe",
+			"revisionTime": "2017-03-22T23:44:13Z",
+			"tree": true
+		},
+		{
+			"checksumSHA1": "tzhhq79Zq4uw2E/AXwWUDZvw8ok=",
+			"path": "gopkg.in/mattn/go-runewidth.v0",
+			"revision": "9e777a8366cce605130a531d2cd6363d07ad7317",
+			"revisionTime": "2017-02-01T02:26:20Z",
 			"tree": true
 		}
 	],
