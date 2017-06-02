@@ -31,7 +31,6 @@ var (
 	pprof        bool
 	logLevel     string
 	enableXff    bool
-	onlySelf     bool
 	prefix       string
 	listen       string
 	listenManage string
@@ -55,7 +54,6 @@ type Config struct {
 	PIDFile      string   `yaml:"pid_file"`
 	EnableXff    bool     `yaml:"xff"`
 	Prefix       string   `yaml:"prefix"`
-	OnlySelf     bool     `yaml:"only_self"`
 	Listen       string   `yaml:"listen"`
 	ListenManage string   `yaml:"listen_manage"`
 	BasicAuth    bool     `yaml:"basic_auth"`
@@ -77,7 +75,6 @@ func init() {
 	flag.StringVar(&pidFile, "pid_file", "", "PID to write to")
 	flag.BoolVar(&enableXff, "xff", false, "X-Forwarded-For header support")
 	flag.StringVar(&prefix, "prefix", "", "Backend key path prefix")
-	flag.BoolVar(&onlySelf, "only_self", false, "Only support self metadata query")
 	flag.StringVar(&group, "group", "default", "The metad's group name, same group share same mapping config from backend")
 	flag.StringVar(&listen, "listen", ":80", "Address to listen to (TCP)")
 	flag.StringVar(&listenManage, "listen_manage", "127.0.0.1:9611", "Address to listen to for manage requests (TCP)")
@@ -165,8 +162,6 @@ func setConfigFromFlag(config *Config, f *flag.Flag) {
 		config.EnableXff = enableXff
 	case "prefix":
 		config.Prefix = prefix
-	case "only_self":
-		config.OnlySelf = onlySelf
 	case "group":
 		config.Group = group
 	case "listen":
