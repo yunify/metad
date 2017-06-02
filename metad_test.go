@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/yunify/metad/log"
 	"github.com/yunify/metad/util"
+	"math/rand"
 )
 
 var (
@@ -21,16 +22,11 @@ var (
 
 func init() {
 	log.SetLevel("debug")
+	rand.Seed(time.Now().UnixNano())
 }
 
 func TestMetad(t *testing.T) {
-	config := &Config{
-		Backend: testBackend,
-	}
-	metad, err := New(config)
-	assert.NoError(t, err)
-
-	metad.Init()
+	metad := NewTestMetad()
 
 	defer metad.Stop()
 
@@ -202,13 +198,7 @@ func TestMetad(t *testing.T) {
 }
 
 func TestMetadWatch(t *testing.T) {
-	config := &Config{
-		Backend: testBackend,
-	}
-	metad, err := New(config)
-	assert.NoError(t, err)
-
-	metad.Init()
+	metad := NewTestMetad()
 
 	defer metad.Stop()
 	ip := "192.168.1.1"
@@ -283,13 +273,7 @@ func TestMetadWatch(t *testing.T) {
 }
 
 func TestMetadWatchSelf(t *testing.T) {
-	config := &Config{
-		Backend: testBackend,
-	}
-	metad, err := New(config)
-	assert.NoError(t, err)
-
-	metad.Init()
+	metad := NewTestMetad()
 
 	defer metad.Stop()
 
@@ -371,13 +355,7 @@ func TestMetadWatchSelf(t *testing.T) {
 }
 
 func TestMetadMappingDelete(t *testing.T) {
-	config := &Config{
-		Backend: testBackend,
-	}
-	metad, err := New(config)
-	assert.NoError(t, err)
-
-	metad.Init()
+	metad := NewTestMetad()
 
 	defer metad.Stop()
 
@@ -437,14 +415,7 @@ func TestMetadMappingDelete(t *testing.T) {
 }
 
 func TestMetadAccessRule(t *testing.T) {
-	config := &Config{
-		Backend: testBackend,
-	}
-	metad, err := New(config)
-	assert.NoError(t, err)
-
-	metad.Init()
-
+	metad := NewTestMetad()
 	defer metad.Stop()
 
 	data := map[string]interface{}{
@@ -517,6 +488,21 @@ func TestMetadAccessRule(t *testing.T) {
 	assert.Equal(t, "1234567", util.GetMapValue(parse(w), "/self/cluster/env/secret"))
 	// node2 can not access cl-1
 	assert.Equal(t, "", util.GetMapValue(parse(w), "/clusters/cl-1/name"))
+}
+
+func NewTestMetad() *Metad {
+	group := fmt.Sprintf("/group%v", rand.Intn(10000))
+	config := &Config{
+		Backend: testBackend,
+		Group:   group,
+	}
+	metad, err := New(config)
+	if err != nil {
+		panic(err)
+	}
+
+	metad.Init()
+	return metad
 }
 
 func getAndCheckMapping(metad *Metad, t *testing.T, ip string, exist bool) {

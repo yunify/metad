@@ -3,6 +3,7 @@ package store
 import (
 	"encoding/json"
 	"fmt"
+	"path"
 	"strings"
 	"sync"
 )
@@ -53,19 +54,27 @@ func UnmarshalAccessRule(data string) ([]AccessRule, error) {
 	return rules, err
 }
 
-type AccessNode struct {
+type accessNode struct {
 	Name     string
 	Mode     AccessMode
-	parent   *AccessNode
-	Children []*AccessNode
+	parent   *accessNode
+	Children []*accessNode
 }
 
-func (n *AccessNode) HasChild() bool {
+func (n *accessNode) Path() string {
+	if n.parent == nil {
+		return n.Name
+	} else {
+		return path.Join(n.parent.Path(), n.Name)
+	}
+}
+
+func (n *accessNode) HasChild() bool {
 	return len(n.Children) > 0
 }
 
-func (n *AccessNode) GetChild(name string, strict bool) *AccessNode {
-	var wildcardNode *AccessNode
+func (n *accessNode) GetChild(name string, strict bool) *accessNode {
+	var wildcardNode *accessNode
 	for _, c := range n.Children {
 		if name == c.Name {
 			return c
@@ -140,21 +149,35 @@ func (s *accessStore) GetAccessRule(hosts []string) map[string][]AccessRule {
 }
 
 type AccessTree interface {
-	GetRoot() *AccessNode
+	GetRoot() *accessNode
 	ToAccessRule() []AccessRule
 	Json() string
 }
 
 type accessTree struct {
-	Root *AccessNode
+	Root *accessNode
 }
 
-func (t *accessTree) GetRoot() *AccessNode {
+func (t *accessTree) GetRoot() *accessNode {
 	return t.Root
 }
 
 func (t *accessTree) ToAccessRule() []AccessRule {
-	return nil
+	rules := []AccessRule{}
+	rules = t.toAccessRule(t.Root, rules)
+	return rules
+}
+
+func (t *accessTree) toAccessRule(node *accessNode, rules []AccessRule) []AccessRule {
+	if node.Mode != AccessModeNil {
+		rules = append(rules, AccessRule{Path: node.Path(), Mode: node.Mode})
+	}
+	if node.HasChild() {
+		for _, child := range node.Children {
+			rules = t.toAccessRule(child, rules)
+		}
+	}
+	return rules
 }
 
 func (t *accessTree) Json() string {
@@ -163,7 +186,7 @@ func (t *accessTree) Json() string {
 }
 
 func NewAccessTree(rules []AccessRule) AccessTree {
-	root := &AccessNode{
+	root := &accessNode{
 		Name:   "/",
 		Mode:   AccessModeNil,
 		parent: nil,
@@ -182,7 +205,7 @@ func NewAccessTree(rules []AccessRule) AccessTree {
 				}
 				child := curr.GetChild(component, true)
 				if child == nil {
-					child = &AccessNode{Name: component, Mode: AccessModeNil, parent: curr}
+					child = &accessNode{Name: component, Mode: AccessModeNil, parent: curr}
 					curr.Children = append(curr.Children, child)
 				}
 				curr = child

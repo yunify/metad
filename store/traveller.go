@@ -22,7 +22,7 @@ type Traveller interface {
 }
 
 type stackElement struct {
-	node *AccessNode
+	node *accessNode
 	mode AccessMode
 }
 
@@ -52,7 +52,7 @@ type nodeTraveller struct {
 	store          *store
 	access         AccessTree
 	currNode       *node
-	currAccessNode *AccessNode
+	currAccessNode *accessNode
 	currMode       AccessMode
 	stack          travellerStack
 }
@@ -94,7 +94,7 @@ func (t *nodeTraveller) enter(node string) bool {
 	if n == nil {
 		return false
 	}
-	var an *AccessNode
+	var an *accessNode
 	if t.currAccessNode != nil {
 		an = t.currAccessNode.GetChild(node, false)
 	}
