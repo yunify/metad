@@ -15,6 +15,7 @@ import (
 	"path"
 	"reflect"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -106,9 +107,10 @@ func (c *Client) Delete(nodePath string, dir bool) error {
 }
 
 func (c *Client) Sync(store store.Store, stopChan chan bool) {
-	startedChan := make(chan bool)
-	go c.internalSync(c.prefix, stopChan, startedChan, c.newInitStoreFunc(c.prefix, store), newProcessSyncChangeFunc(store))
-	<-startedChan
+	initWG := &sync.WaitGroup{}
+	initWG.Add(1)
+	go c.internalSync(c.prefix, stopChan, initWG, c.newInitStoreFunc(c.prefix, store), newProcessSyncChangeFunc(store))
+	initWG.Wait()
 }
 
 func (c *Client) GetMapping(nodePath string, dir bool) (interface{}, error) {
@@ -134,9 +136,10 @@ func (c *Client) DeleteMapping(nodePath string, dir bool) error {
 }
 
 func (c *Client) SyncMapping(mapping store.Store, stopChan chan bool) {
-	startedChan := make(chan bool)
-	go c.internalSync(c.mappingPrefix, stopChan, startedChan, c.newInitStoreFunc(c.mappingPrefix, mapping), newProcessSyncChangeFunc(mapping))
-	<-startedChan
+	initWG := &sync.WaitGroup{}
+	initWG.Add(1)
+	go c.internalSync(c.mappingPrefix, stopChan, initWG, c.newInitStoreFunc(c.mappingPrefix, mapping), newProcessSyncChangeFunc(mapping))
+	initWG.Wait()
 }
 
 func (c *Client) GetAccessRule() (map[string][]store.AccessRule, error) {
@@ -179,8 +182,9 @@ func (c *Client) DeleteAccessRule(hosts []string) error {
 }
 
 func (c *Client) SyncAccessRule(accessStore store.AccessStore, stopChan chan bool) {
-	startedChan := make(chan bool)
-	go c.internalSync(c.rulePrefix, stopChan, startedChan, func() error {
+	initWG := &sync.WaitGroup{}
+	initWG.Add(1)
+	go c.internalSync(c.rulePrefix, stopChan, initWG, func() error {
 		val, err := c.GetAccessRule()
 		if err != nil {
 			return err
@@ -202,7 +206,7 @@ func (c *Client) SyncAccessRule(accessStore store.AccessStore, stopChan chan boo
 			log.Warning("Unknow watch event type: %s ", event.Type)
 		}
 	})
-	<-startedChan
+	initWG.Wait()
 }
 
 func (c *Client) internalGets(prefix, nodePath string) (map[string]string, error) {
@@ -250,33 +254,46 @@ func handleGetResp(prefix string, resp *client.GetResponse, vars map[string]stri
 	return nil
 }
 
-func (c *Client) internalSync(prefix string, stopChan chan bool, startedChan chan bool, initStoreFunc func() error, processChangeFunc func(event *client.Event, nodePath, value string)) {
-
+func (c *Client) internalSync(prefix string, stopChan chan bool, initWG *sync.WaitGroup, initStoreFunc func() error, processChangeFunc func(event *client.Event, nodePath, value string)) {
 	var rev int64 = 0
 	init := false
+	stop := false
 	cancelRoutine := make(chan bool)
 	defer close(cancelRoutine)
 
-	for {
+	var ctx context.Context
+	var cancel context.CancelFunc
+
+	go func() {
 		select {
+		case <-stopChan:
+			log.Info("Sync %s stop.", prefix)
+			stop = true
+			if cancel != nil {
+				cancel()
+			}
 		case <-cancelRoutine:
 			return
-		default:
 		}
+	}()
 
-		ctx, cancel := context.WithCancel(context.Background())
-		watchChan := c.client.Watch(ctx, prefix, client.WithPrefix(), client.WithRev(rev))
-
-		go func() {
-			select {
-			case <-stopChan:
-				log.Info("Sync %s stop.", prefix)
-				cancel()
-				cancelRoutine <- true
+	for {
+		if stop {
+			if !init {
+				initWG.Done()
 			}
-		}()
-
+			return
+		}
+		ctx, cancel = context.WithCancel(context.Background())
+		watchChan := c.client.Watch(ctx, prefix, client.WithPrefix(), client.WithRev(rev))
+		if watchChan == nil {
+			continue
+		}
 		for !init {
+			if stop {
+				initWG.Done()
+				return
+			}
 			err := initStoreFunc()
 			if err != nil {
 				log.Error("Get init value from etcd nodePath:%s, error-type: %s, error: %s", prefix, reflect.TypeOf(err), err.Error())
@@ -286,9 +303,7 @@ func (c *Client) internalSync(prefix string, stopChan chan bool, startedChan cha
 			}
 			log.Info("Init store for prefix %s success.", prefix)
 			init = true
-			go func() {
-				startedChan <- true
-			}()
+			initWG.Done()
 		}
 		for resp := range watchChan {
 			for _, event := range resp.Events {
