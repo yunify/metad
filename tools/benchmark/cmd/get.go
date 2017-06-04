@@ -17,12 +17,14 @@ var getCmd = &cobra.Command{
 }
 
 var (
-	getTotal int
+	getTotal         int
+	fillSimulateData bool
 )
 
 func init() {
 	RootCmd.AddCommand(getCmd)
 	getCmd.Flags().IntVar(&getTotal, "total", 10000, "Total number of get requests")
+	getCmd.Flags().BoolVar(&fillSimulateData, "fill_simulate_data", false, "Fill simulate metadata before get bentchmark.")
 }
 
 func getFunc(cmd *cobra.Command, args []string) {
@@ -34,6 +36,13 @@ func getFunc(cmd *cobra.Command, args []string) {
 
 	if len(args) == 1 {
 		path = args[0]
+	}
+
+	if fillSimulateData {
+		data := genMetadata()
+		mapping := genMappings(data)
+		fillMetadata(data, mapping)
+		fmt.Println("fill metadata finish.")
 	}
 
 	results = make(chan result)

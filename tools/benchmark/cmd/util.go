@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"encoding/json"
 	"io"
 	"math/rand"
 	"net/http"
@@ -38,6 +39,62 @@ func makeManageRequest(method, api string, body io.Reader) *http.Request {
 	req, _ := http.NewRequest(method, strings.Join([]string{manageEndpoint, api}, ""), body)
 	req.Header.Set("Accept", "application/json")
 	return req
+}
+
+func fillMetadata(data map[string]interface{}, mapping map[string]interface{}) {
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		panic(err)
+	}
+	jsonMapping, err := json.Marshal(mapping)
+	if err != nil {
+		panic(err)
+	}
+
+	client := makeHttpClients(1)[0]
+
+	dataReq := makeManageRequest("POST", "/v1/data", strings.NewReader(string(jsonData)))
+
+	resp, err := client.Do(dataReq)
+
+	if err != nil {
+		panic(err)
+	}
+	if resp.StatusCode != 200 {
+		panic("fill metad data error")
+	}
+	if resp != nil {
+		resp.Body.Close()
+	}
+
+	mappingReq := makeManageRequest("POST", "/v1/mapping", strings.NewReader(string(jsonMapping)))
+
+	resp, err = client.Do(mappingReq)
+	if err != nil {
+		panic(err)
+	}
+	if resp.StatusCode != 200 {
+		panic("fill metad mapping error")
+	}
+	if resp != nil {
+		resp.Body.Close()
+	}
+	jsonRule := `
+		{"127.0.0.1":[{"path":"/", "mode":1}]}
+	`
+	ruleReq := makeManageRequest("POST", "/v1/rule", strings.NewReader(string(jsonRule)))
+
+	resp, err = client.Do(ruleReq)
+	if err != nil {
+		panic(err)
+	}
+	//ignore 404 for old metad version not support /v1/rule api.
+	if resp.StatusCode != 200 && resp.StatusCode != 404 {
+		panic("fill metad rule error")
+	}
+	if resp != nil {
+		resp.Body.Close()
+	}
 }
 
 func getEndpoint() string {
