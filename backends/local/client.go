@@ -7,14 +7,17 @@ import (
 
 // a backend just for test.
 type Client struct {
-	data    store.Store
-	mapping store.Store
+	data        store.Store
+	mapping     store.Store
+	rules       map[string][]store.AccessRule
+	accessStore store.AccessStore
 }
 
 func NewLocalClient() (*Client, error) {
 	return &Client{
 		data:    store.New(),
 		mapping: store.New(),
+		rules:   map[string][]store.AccessRule{},
 	}, nil
 }
 
@@ -77,6 +80,47 @@ func (c *Client) DeleteMapping(nodePath string, dir bool) error {
 
 func (c *Client) SyncMapping(mapping store.Store, stopChan chan bool) {
 	go c.internalSync("mapping", c.mapping, mapping, stopChan)
+}
+
+func (c *Client) GetAccessRule() (map[string][]store.AccessRule, error) {
+	result := make(map[string][]store.AccessRule, len(c.rules))
+	for k, v := range c.rules {
+		result[k] = v
+	}
+	return result, nil
+}
+
+func (c *Client) PutAccessRule(rules map[string][]store.AccessRule) error {
+	for k, v := range rules {
+		c.rules[k] = v
+		if c.accessStore != nil {
+			c.accessStore.Put(k, v)
+		}
+	}
+	return nil
+}
+
+func (c *Client) DeleteAccessRule(hosts []string) error {
+	for _, host := range hosts {
+		delete(c.rules, host)
+		if c.accessStore != nil {
+			c.accessStore.Delete(host)
+		}
+	}
+	return nil
+}
+
+func (c *Client) SyncAccessRule(accessStore store.AccessStore, stopChan chan bool) {
+	c.accessStore = accessStore
+	for k, v := range c.rules {
+		c.accessStore.Put(k, v)
+	}
+	go func() {
+		select {
+		case <-stopChan:
+			c.accessStore = nil
+		}
+	}()
 }
 
 func (c *Client) internalSync(name string, from store.Store, to store.Store, stopChan chan bool) {

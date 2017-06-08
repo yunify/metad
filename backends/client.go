@@ -25,6 +25,11 @@ type StoreClient interface {
 	PutMapping(nodePath string, mapping interface{}, replace bool) error
 	DeleteMapping(nodePath string, dir bool) error
 	SyncMapping(mapping store.Store, stopChan chan bool)
+
+	GetAccessRule() (map[string][]store.AccessRule, error)
+	PutAccessRule(rules map[string][]store.AccessRule) error
+	DeleteAccessRule(hosts []string) error
+	SyncAccessRule(accessStore store.AccessStore, stopChan chan bool)
 }
 
 // New is used to create a storage client based on our configuration.

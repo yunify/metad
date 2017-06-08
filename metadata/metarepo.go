@@ -19,36 +19,35 @@ import (
 const DEFAULT_WATCH_BUF_LEN = 100
 
 type MetadataRepo struct {
-	onlySelf        bool
-	mapping         store.Store
-	storeClient     backends.StoreClient
-	data            store.Store
-	metaStopChan    chan bool
-	mappingStopChan chan bool
-	timerPool       *util.TimerPool
+	mapping            store.Store
+	storeClient        backends.StoreClient
+	data               store.Store
+	accessStore        store.AccessStore
+	metaStopChan       chan bool
+	mappingStopChan    chan bool
+	accessRuleStopChan chan bool
+	timerPool          *util.TimerPool
 }
 
-func New(onlySelf bool, storeClient backends.StoreClient) *MetadataRepo {
+func New(storeClient backends.StoreClient) *MetadataRepo {
 	metadataRepo := MetadataRepo{
-		onlySelf:        onlySelf,
-		mapping:         store.New(),
-		storeClient:     storeClient,
-		data:            store.New(),
-		metaStopChan:    make(chan bool),
-		mappingStopChan: make(chan bool),
-		timerPool:       util.NewTimerPool(100 * time.Millisecond),
+		mapping:            store.New(),
+		storeClient:        storeClient,
+		data:               store.New(),
+		accessStore:        store.NewAccessStore(),
+		metaStopChan:       make(chan bool),
+		mappingStopChan:    make(chan bool),
+		accessRuleStopChan: make(chan bool),
+		timerPool:          util.NewTimerPool(100 * time.Millisecond),
 	}
 	return &metadataRepo
-}
-
-func (r *MetadataRepo) SetOnlySelf(onlySelf bool) {
-	r.onlySelf = onlySelf
 }
 
 func (r *MetadataRepo) StartSync() {
 	log.Info("Start Sync")
 	r.startMetaSync()
 	r.startMappingSync()
+	r.startAccessRuleSync()
 }
 
 func (r *MetadataRepo) startMetaSync() {
@@ -59,37 +58,69 @@ func (r *MetadataRepo) startMappingSync() {
 	r.storeClient.SyncMapping(r.mapping, r.mappingStopChan)
 }
 
+func (r *MetadataRepo) startAccessRuleSync() {
+	r.storeClient.SyncAccessRule(r.accessStore, r.accessRuleStopChan)
+}
+
 func (r *MetadataRepo) StopSync() {
 	log.Info("Stop Sync")
 	r.metaStopChan <- true
 	r.mappingStopChan <- true
+	r.accessRuleStopChan <- true
 	time.Sleep(1 * time.Second)
 	r.data.Destroy()
 	time.Sleep(1 * time.Second)
 	r.mapping.Destroy()
 }
 
-func (r *MetadataRepo) Root(clientIP string, nodePath string) (currentVersion int64, val interface{}) {
-	nodePath = path.Join("/", nodePath)
-	if r.onlySelf {
-		currentVersion = r.data.Version()
-		if nodePath == "/" {
-			mapVal := make(map[string]interface{})
-			selfVal := r.Self(clientIP, "/")
-			if selfVal != nil {
-				mapVal["self"] = selfVal
+func (r *MetadataRepo) getAccessTree(clientIP string) store.AccessTree {
+	accessTree := r.accessStore.Get(clientIP)
+	//for compatible with old version, auto convert mapping to AccessRule
+	if accessTree == nil {
+		mappingData := r.GetMapping(path.Join("/", clientIP))
+		if mappingData == nil {
+			if log.IsDebugEnable() {
+				log.Debug("Can not find mapping for %s", clientIP)
 			}
-			val = mapVal
+			return nil
 		}
-	} else {
-		currentVersion, val = r.data.Get(nodePath)
-		if val != nil && nodePath == "/" {
-			selfVal := r.Self(clientIP, "/")
-			if selfVal != nil {
-				mapVal, ok := val.(map[string]interface{})
-				if ok {
-					mapVal["self"] = selfVal
-				}
+		mapping, mok := mappingData.(map[string]interface{})
+		if !mok {
+			log.Warning("Mapping for %s is not a map, result:%v", clientIP, mappingData)
+			return nil
+		}
+		flattenMapping := flatmap.Flatten(mapping)
+		rules := []store.AccessRule{}
+		for _, dataPath := range flattenMapping {
+			rules = append(rules, store.AccessRule{Path: dataPath, Mode: store.AccessModeRead})
+		}
+		accessTree = store.NewAccessTree(rules)
+	}
+	return accessTree
+}
+
+func (r *MetadataRepo) Root(clientIP string, nodePath string) (currentVersion int64, val interface{}) {
+	if clientIP == "" {
+		panic(errors.New("clientIP must not be empty."))
+	}
+	nodePath = path.Join("/", nodePath)
+	accessTree := r.getAccessTree(clientIP)
+	if accessTree == nil {
+		return
+	}
+	traveller := r.data.Traveller(accessTree)
+	defer traveller.Close()
+	if !traveller.Enter(nodePath) {
+		return
+	}
+	currentVersion = traveller.GetVersion()
+	val = traveller.GetValue()
+	if val != nil && nodePath == "/" {
+		selfVal := r.self(clientIP, "/", traveller)
+		if selfVal != nil {
+			mapVal, ok := val.(map[string]interface{})
+			if ok {
+				mapVal["self"] = selfVal
 			}
 		}
 	}
@@ -98,17 +129,8 @@ func (r *MetadataRepo) Root(clientIP string, nodePath string) (currentVersion in
 
 func (r *MetadataRepo) Watch(ctx context.Context, clientIP string, nodePath string) interface{} {
 	nodePath = path.Join("/", nodePath)
-
-	if r.onlySelf {
-		if nodePath == "/" {
-			return r.WatchSelf(ctx, clientIP, "/")
-		} else {
-			return nil
-		}
-	} else {
-		w := r.data.Watch(nodePath, DEFAULT_WATCH_BUF_LEN)
-		return r.changeToResult(w, ctx.Done())
-	}
+	w := r.data.Watch(nodePath, DEFAULT_WATCH_BUF_LEN)
+	return r.changeToResult(w, ctx.Done())
 }
 
 var TIMER_NIL *time.Timer = &time.Timer{C: nil}
@@ -203,6 +225,17 @@ func (r *MetadataRepo) Self(clientIP string, nodePath string) interface{} {
 		panic(errors.New("clientIP must not be empty."))
 	}
 	nodePath = path.Join("/", nodePath)
+
+	accessTree := r.getAccessTree(clientIP)
+	if accessTree == nil {
+		return nil
+	}
+	traveller := r.data.Traveller(accessTree)
+	defer traveller.Close()
+	return r.self(clientIP, nodePath, traveller)
+}
+
+func (r *MetadataRepo) self(clientIP string, nodePath string, traveller store.Traveller) interface{} {
 	mappingData := r.GetMapping(path.Join("/", clientIP))
 	if mappingData == nil {
 		if log.IsDebugEnable() {
@@ -215,16 +248,20 @@ func (r *MetadataRepo) Self(clientIP string, nodePath string) interface{} {
 		log.Warning("Mapping for %s is not a map, result:%v", clientIP, mappingData)
 		return nil
 	}
-	return r.getMappingDatas(nodePath, mapping)
+	return r.getMappingDatas(nodePath, mapping, traveller)
 }
 
-func (r *MetadataRepo) getMappingData(nodePath, link string) interface{} {
+func (r *MetadataRepo) getMappingData(nodePath, link string, traveller store.Traveller) interface{} {
 	nodePath = path.Join(link, nodePath)
-	_, val := r.data.Get(nodePath)
-	return val
+	if traveller.Enter(nodePath) {
+		val := traveller.GetValue()
+		traveller.BackToRoot()
+		return val
+	}
+	return nil
 }
 
-func (r *MetadataRepo) getMappingDatas(nodePath string, mapping map[string]interface{}) interface{} {
+func (r *MetadataRepo) getMappingDatas(nodePath string, mapping map[string]interface{}, traveller store.Traveller) interface{} {
 	nodePath = path.Join("/", nodePath)
 	paths := strings.Split(nodePath, "/")[1:] // trim first blank item
 	// nodePath is "/"
@@ -233,7 +270,7 @@ func (r *MetadataRepo) getMappingDatas(nodePath string, mapping map[string]inter
 		for k, v := range mapping {
 			submapping, isMap := v.(map[string]interface{})
 			if isMap {
-				val := r.getMappingDatas("/", submapping)
+				val := r.getMappingDatas("/", submapping, traveller)
 				if val != nil {
 					meta[k] = val
 				} else {
@@ -241,7 +278,7 @@ func (r *MetadataRepo) getMappingDatas(nodePath string, mapping map[string]inter
 				}
 			} else {
 				subNodePath := fmt.Sprintf("%v", v)
-				val := r.getMappingData("/", subNodePath)
+				val := r.getMappingData("/", subNodePath, traveller)
 				if val != nil {
 					meta[k] = val
 				} else {
@@ -257,9 +294,9 @@ func (r *MetadataRepo) getMappingDatas(nodePath string, mapping map[string]inter
 		if ok {
 			submapping, isMap := elemValue.(map[string]interface{})
 			if isMap {
-				return r.getMappingDatas(path.Join(paths[1:]...), submapping)
+				return r.getMappingDatas(path.Join(paths[1:]...), submapping, traveller)
 			} else {
-				return r.getMappingData(path.Join(paths[1:]...), fmt.Sprintf("%v", elemValue))
+				return r.getMappingData(path.Join(paths[1:]...), fmt.Sprintf("%v", elemValue), traveller)
 			}
 		} else {
 			if log.IsDebugEnable() {
@@ -398,6 +435,27 @@ func (r *MetadataRepo) DeleteMapping(nodePath string, subs ...string) error {
 
 func (r *MetadataRepo) DataVersion() int64 {
 	return r.data.Version()
+}
+
+func (r *MetadataRepo) PutAccessRule(rulesMap map[string][]store.AccessRule) error {
+	for _, v := range rulesMap {
+		err := store.CheckAccessRules(v)
+		if err != nil {
+			return err
+		}
+	}
+	return r.storeClient.PutAccessRule(rulesMap)
+}
+
+func (r *MetadataRepo) DeleteAccessRule(hosts []string) error {
+	if len(hosts) == 0 {
+		return nil
+	}
+	return r.storeClient.DeleteAccessRule(hosts)
+}
+
+func (r *MetadataRepo) GetAccessRule(hosts []string) map[string][]store.AccessRule {
+	return r.accessStore.GetAccessRule(hosts)
 }
 
 func checkSubs(subs []string) error {

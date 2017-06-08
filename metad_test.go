@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/yunify/metad/log"
 	"github.com/yunify/metad/util"
+	"math/rand"
 )
 
 var (
@@ -21,16 +22,11 @@ var (
 
 func init() {
 	log.SetLevel("debug")
+	rand.Seed(time.Now().UnixNano())
 }
 
 func TestMetad(t *testing.T) {
-	config := &Config{
-		Backend: testBackend,
-	}
-	metad, err := New(config)
-	assert.NoError(t, err)
-
-	metad.Init()
+	metad := NewTestMetad()
 
 	defer metad.Stop()
 
@@ -202,15 +198,11 @@ func TestMetad(t *testing.T) {
 }
 
 func TestMetadWatch(t *testing.T) {
-	config := &Config{
-		Backend: testBackend,
-	}
-	metad, err := New(config)
-	assert.NoError(t, err)
-
-	metad.Init()
+	metad := NewTestMetad()
 
 	defer metad.Stop()
+	ip := "192.168.1.1"
+	remoteAddr := ip + ":1234"
 
 	dataJson := `
 	{
@@ -230,12 +222,21 @@ func TestMetadWatch(t *testing.T) {
 	metad.manageRouter.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
 
+	ruleJson := `
+	{"192.168.1.1":[{"path":"/","mode":1}]
+	}
+	`
+	req = httptest.NewRequest("PUT", "/v1/rule/", strings.NewReader(ruleJson))
+	w = httptest.NewRecorder()
+	metad.manageRouter.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
+
 	time.Sleep(sleepTime)
 	versions := make(chan int, 1)
 	go func() {
 		req := httptest.NewRequest("GET", "/nodes/1/ip?wait=true", nil)
 		req.Header.Set("accept", "application/json")
-
+		req.RemoteAddr = remoteAddr
 		w := httptest.NewRecorder()
 		metad.router.ServeHTTP(w, req)
 		assert.Equal(t, 200, w.Code)
@@ -262,6 +263,7 @@ func TestMetadWatch(t *testing.T) {
 	//wait with prev_version should return immediately
 	req = httptest.NewRequest("GET", fmt.Sprintf("/nodes/1/ip?wait=true&prev_version=%d", v), nil)
 	req.Header.Set("accept", "application/json")
+	req.RemoteAddr = remoteAddr
 	w = httptest.NewRecorder()
 	metad.router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
@@ -271,13 +273,7 @@ func TestMetadWatch(t *testing.T) {
 }
 
 func TestMetadWatchSelf(t *testing.T) {
-	config := &Config{
-		Backend: testBackend,
-	}
-	metad, err := New(config)
-	assert.NoError(t, err)
-
-	metad.Init()
+	metad := NewTestMetad()
 
 	defer metad.Stop()
 
@@ -359,13 +355,7 @@ func TestMetadWatchSelf(t *testing.T) {
 }
 
 func TestMetadMappingDelete(t *testing.T) {
-	config := &Config{
-		Backend: testBackend,
-	}
-	metad, err := New(config)
-	assert.NoError(t, err)
-
-	metad.Init()
+	metad := NewTestMetad()
 
 	defer metad.Stop()
 
@@ -424,6 +414,105 @@ func TestMetadMappingDelete(t *testing.T) {
 	getAndCheckMapping(metad, t, ip, false)
 }
 
+func TestMetadAccessRule(t *testing.T) {
+	metad := NewTestMetad()
+	defer metad.Stop()
+
+	data := map[string]interface{}{
+		"clusters": map[string]interface{}{
+			"cl-1": map[string]interface{}{
+				"name": "cl-1",
+				"env": map[string]interface{}{
+					"username": "user1",
+					"secret":   "123456",
+				},
+				"public_key": "public_key_val",
+			},
+			"cl-2": map[string]interface{}{
+				"name": "cl-2",
+				"env": map[string]interface{}{
+					"username": "user2",
+					"secret":   "1234567",
+				},
+				"public_key": "public_key_val2",
+			},
+		},
+	}
+
+	b, _ := json.Marshal(data)
+	dataJson := string(b)
+	req := httptest.NewRequest("PUT", "/v1/data/", strings.NewReader(dataJson))
+	w := httptest.NewRecorder()
+	metad.manageRouter.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
+	mappingJson := `
+	{"192.168.1.1":{"cluster":"/clusters/cl-1", "links":{"c2":"/clusters/cl-2"}},
+	"192.168.1.2":{"cluster":"/clusters/cl-2"}}`
+	req = httptest.NewRequest("POST", "/v1/mapping", strings.NewReader(mappingJson))
+	w = httptest.NewRecorder()
+	metad.manageRouter.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
+
+	ruleJson := `
+	{"192.168.1.1":[{"path":"/","mode":0}, {"path":"/clusters/*/env","mode":0},{"path":"/clusters/cl-1","mode":1}, {"path":"/clusters/cl-2","mode":1}, {"path":"/clusters/cl-2/env/secret","mode":0}],
+	"192.168.1.2":[{"path":"/","mode":0}, {"path":"/clusters/*/env","mode":0},{"path":"/clusters/cl-2","mode":1}]
+	}
+	`
+	req = httptest.NewRequest("POST", "/v1/rule", strings.NewReader(ruleJson))
+	w = httptest.NewRecorder()
+	metad.manageRouter.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
+
+	time.Sleep(sleepTime)
+
+	req = httptest.NewRequest("GET", "/v1/rule", nil)
+	req.Header.Set("accept", "application/json")
+	w = httptest.NewRecorder()
+	metad.manageRouter.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
+	assert.Equal(t, "/", util.GetMapValue(parse(w), "/192.168.1.1/0/path"))
+	assert.Equal(t, "1", util.GetMapValue(parse(w), "/192.168.1.1/2/mode"))
+
+	req = httptest.NewRequest("GET", "/", nil)
+	req.RemoteAddr = "192.168.1.1:1234"
+	req.Header.Set("accept", "application/json")
+	w = httptest.NewRecorder()
+	metad.router.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
+	assert.Equal(t, "cl-1", util.GetMapValue(parse(w), "/self/cluster/name"))
+	// node1 can access cl-2
+	assert.Equal(t, "cl-2", util.GetMapValue(parse(w), "/clusters/cl-2/name"))
+	assert.Equal(t, "user2", util.GetMapValue(parse(w), "/self/links/c2/env/username"))
+	//can not access cl-2 env/secret
+	assert.Equal(t, "", util.GetMapValue(parse(w), "/self/links/c2/env/secret"))
+
+	req = httptest.NewRequest("GET", "/", nil)
+	req.RemoteAddr = "192.168.1.2:1234"
+	req.Header.Set("accept", "application/json")
+	w = httptest.NewRecorder()
+	metad.router.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
+	assert.Equal(t, "cl-2", util.GetMapValue(parse(w), "/self/cluster/name"))
+	assert.Equal(t, "1234567", util.GetMapValue(parse(w), "/self/cluster/env/secret"))
+	// node2 can not access cl-1
+	assert.Equal(t, "", util.GetMapValue(parse(w), "/clusters/cl-1/name"))
+}
+
+func NewTestMetad() *Metad {
+	group := fmt.Sprintf("/group%v", rand.Intn(10000))
+	config := &Config{
+		Backend: testBackend,
+		Group:   group,
+	}
+	metad, err := New(config)
+	if err != nil {
+		panic(err)
+	}
+
+	metad.Init()
+	return metad
+}
+
 func getAndCheckMapping(metad *Metad, t *testing.T, ip string, exist bool) {
 	req := httptest.NewRequest("GET", "/v1/mapping", nil)
 	req.Header.Set("Accept", "application/json")
@@ -460,7 +549,7 @@ func parse(w *httptest.ResponseRecorder) interface{} {
 	log.Debug("%s response %s", requestID, w.Body.String())
 	err := json.Unmarshal(w.Body.Bytes(), &result)
 	if err != nil {
-		log.Error("json_err: %s", err.Error())
+		panic(fmt.Errorf("json_err: %s", err.Error()))
 	}
 	return result
 }
