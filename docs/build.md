@@ -1,11 +1,6 @@
-# Installation
+# Building
 
-### Binary Download
-
-Currently metad ships binaries for OS X and Linux 64bit systems. You can download the latest release from [GitHub](https://github.com/yunify/metad/releases)
-
-
-#### Building from Source
+## Building from Source
 
 Go 1.7+ is required to build metad, which uses the new vendor directory.
 
@@ -31,7 +26,7 @@ sudo ./install
 ```
 
 
-#### Building from Source by docker for alpine
+## Building from Source by docker for alpine
 
 ```
 docker build . -t qingcloud/metad_builder_alpine -f Dockerfile.build.alpine
@@ -40,12 +35,8 @@ docker run -ti --rm -v $(pwd):/app qingcloud/metad_builder_alpine ./build
 
 The above docker commands will produce binary in the local bin directory.
 
-#### Run by docker image
+## Run by docker image
 
 ```
 docker run -it qingcloud/metad
 ```
-
-### Next Steps
-
-Get up and running with the [Quick Start Guide](quick-start-guide.md).

@@ -1,6 +1,8 @@
 metad
 =====
 
+English|[中文](README_zh.md)
+
 [![Build Status](https://travis-ci.org/yunify/metad.svg?branch=master)](https://travis-ci.org/yunify/metad) [![Gitter](https://badges.gitter.im/yunify/metad.svg)](https://gitter.im/yunify/metad?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge)
 
 `metad` is a metadata server support the following features:
@@ -10,11 +12,16 @@ metad
 * support metadata local cache, so it can be used as a proxy to reducing the request pressure of backend (etcd).
 * api out format support json/yaml/text,and is metadata/developer friendly data structure.
 * support as [confd](https://github.com/yunify/confd)'s backend.
+* support metadata access rule define.
 
+
+## Installation
+
+You can download the latest release from [GitHub](https://github.com/yunify/metad/releases)
+
+* [build from source](docs/build.md)
 
 ## Getting Started
-
-Before we begin be sure to [download and install metad](docs/installation.md).
 
 * [quick start guide](docs/quick-start-guide.md)
 
