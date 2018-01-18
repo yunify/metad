@@ -3,7 +3,8 @@
 # that can be found in the LICENSE file.
 
 FROM alpine:3.4
-MAINTAINER jolestar <jolestar@gmail.com>
+
+LABEL MAINTAINER="jolestar <jolestar@gmail.com>"
 
 COPY bin/alpine/metad /usr/bin/
 

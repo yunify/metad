@@ -17,11 +17,12 @@ import (
 
 	client "github.com/coreos/etcd/clientv3"
 	"github.com/coreos/etcd/mvcc/mvccpb"
+	"golang.org/x/net/context"
+
 	"github.com/yunify/metad/log"
 	"github.com/yunify/metad/store"
 	"github.com/yunify/metad/util"
 	"github.com/yunify/metad/util/flatmap"
-	"golang.org/x/net/context"
 )
 
 const SELF_MAPPING_PATH = "/_metad/mapping"
