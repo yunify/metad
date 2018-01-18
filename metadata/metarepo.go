@@ -1,19 +1,24 @@
+// Copyright 2018 Yunify Inc. All rights reserved.
+// Use of this source code is governed by a Apache license
+// that can be found in the LICENSE file.
+
 package metadata
 
 import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/yunify/metad/backends"
-	"github.com/yunify/metad/log"
-	"github.com/yunify/metad/store"
-	"github.com/yunify/metad/util"
-	"github.com/yunify/metad/util/flatmap"
 	"net"
 	"path"
 	"reflect"
 	"strings"
 	"time"
+
+	"github.com/yunify/metad/backends"
+	"github.com/yunify/metad/log"
+	"github.com/yunify/metad/store"
+	"github.com/yunify/metad/util"
+	"github.com/yunify/metad/util/flatmap"
 )
 
 const DEFAULT_WATCH_BUF_LEN = 100

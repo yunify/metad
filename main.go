@@ -1,14 +1,19 @@
+// Copyright 2018 Yunify Inc. All rights reserved.
+// Use of this source code is governed by a Apache license
+// that can be found in the LICENSE file.
+
 package main
 
 import (
 	"flag"
 	"fmt"
-	"github.com/yunify/metad/log"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
 	"runtime"
 	"time"
+
+	"github.com/yunify/metad/log"
 )
 
 func main() {

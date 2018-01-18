@@ -1,14 +1,19 @@
+// Copyright 2018 Yunify Inc. All rights reserved.
+// Use of this source code is governed by a Apache license
+// that can be found in the LICENSE file.
+
 package cmd
 
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/spf13/cobra"
-	"gopkg.in/cheggaaa/pb.v2"
 	"net/http"
 	"os"
 	"path"
 	"strings"
+
+	"github.com/spf13/cobra"
+	"gopkg.in/cheggaaa/pb.v2"
 )
 
 // putCmd represents the put command

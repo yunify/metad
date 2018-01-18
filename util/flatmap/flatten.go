@@ -1,3 +1,7 @@
+// Copyright 2018 Yunify Inc. All rights reserved.
+// Use of this source code is governed by a Apache license
+// that can be found in the LICENSE file.
+
 package flatmap
 
 // Origin code is from
@@ -7,9 +11,10 @@ package flatmap
 import (
 	"errors"
 	"fmt"
-	"github.com/yunify/metad/log"
 	"reflect"
 	"strconv"
+
+	"github.com/yunify/metad/log"
 )
 
 // Flatten takes a structure and turns into a flat map[string]string.

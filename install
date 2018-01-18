@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Copyright 2018 Yunify Inc. All rights reserved.
+# Use of this source code is governed by a Apache license
+# that can be found in the LICENSE file.
 
 BIN_DIR=${BIN_DIR:-/usr/local/bin}
 INSTALL=install
