@@ -23,13 +23,14 @@ import (
 	"github.com/golang/gddo/httputil"
 	"github.com/gorilla/mux"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	yaml "gopkg.in/yaml.v2"
+
 	"github.com/yunify/metad/atomic"
 	"github.com/yunify/metad/backends"
 	"github.com/yunify/metad/log"
 	"github.com/yunify/metad/metadata"
 	"github.com/yunify/metad/store"
 	"github.com/yunify/metad/util/flatmap"
-	yaml "gopkg.in/yaml.v2"
 )
 
 const (

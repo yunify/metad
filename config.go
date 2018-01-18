@@ -11,9 +11,10 @@ import (
 	"os"
 	"strconv"
 
+	"gopkg.in/yaml.v2"
+
 	"github.com/yunify/metad/backends"
 	"github.com/yunify/metad/log"
-	"gopkg.in/yaml.v2"
 )
 
 type Nodes []string

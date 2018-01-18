@@ -7,15 +7,15 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"math/rand"
 	"net/http/httptest"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
 
-	"math/rand"
-
 	"github.com/stretchr/testify/assert"
+
 	"github.com/yunify/metad/log"
 	"github.com/yunify/metad/util"
 )

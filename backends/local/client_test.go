@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+
 	"github.com/yunify/metad/log"
 	"github.com/yunify/metad/store"
 )

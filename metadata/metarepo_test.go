@@ -11,11 +11,12 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"golang.org/x/net/context"
+
 	"github.com/yunify/metad/backends"
 	"github.com/yunify/metad/log"
 	"github.com/yunify/metad/store"
 	"github.com/yunify/metad/util/flatmap"
-	"golang.org/x/net/context"
 )
 
 func init() {
