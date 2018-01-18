@@ -1,9 +1,20 @@
+// Copyright 2018 Yunify Inc. All rights reserved.
+// Use of this source code is governed by a Apache license
+// that can be found in the LICENSE file.
+
 package etcdv3
 
 import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
+	"io/ioutil"
+	"path"
+	"reflect"
+	"strings"
+	"sync"
+	"time"
+
 	client "github.com/coreos/etcd/clientv3"
 	"github.com/coreos/etcd/mvcc/mvccpb"
 	"github.com/yunify/metad/log"
@@ -11,12 +22,6 @@ import (
 	"github.com/yunify/metad/util"
 	"github.com/yunify/metad/util/flatmap"
 	"golang.org/x/net/context"
-	"io/ioutil"
-	"path"
-	"reflect"
-	"strings"
-	"sync"
-	"time"
 )
 
 const SELF_MAPPING_PATH = "/_metad/mapping"

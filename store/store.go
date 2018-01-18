@@ -1,14 +1,19 @@
+// Copyright 2018 Yunify Inc. All rights reserved.
+// Use of this source code is governed by a Apache license
+// that can be found in the LICENSE file.
+
 package store
 
 import (
 	"fmt"
-	"github.com/yunify/metad/atomic"
-	"github.com/yunify/metad/util"
-	"github.com/yunify/metad/util/flatmap"
 	"path"
 	"reflect"
 	"strings"
 	"sync"
+
+	"github.com/yunify/metad/atomic"
+	"github.com/yunify/metad/util"
+	"github.com/yunify/metad/util/flatmap"
 )
 
 type Store interface {

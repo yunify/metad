@@ -1,11 +1,16 @@
+// Copyright 2018 Yunify Inc. All rights reserved.
+// Use of this source code is governed by a Apache license
+// that can be found in the LICENSE file.
+
 package cmd
 
 import (
 	"fmt"
-	"github.com/spf13/cobra"
-	"gopkg.in/cheggaaa/pb.v2"
 	"net/http"
 	"os"
+
+	"github.com/spf13/cobra"
+	"gopkg.in/cheggaaa/pb.v2"
 )
 
 // getCmd represents the get command
