@@ -11,18 +11,16 @@ import (
 	_ "net/http/pprof"
 	"os"
 	"runtime"
-	"time"
 
 	"github.com/yunify/metad/log"
 )
 
 func main() {
-
 	defer func() {
 		if r := recover(); r != nil {
-			log.Error("Main Recover: %v, try restart.", r)
-			time.Sleep(time.Duration(1000) * time.Millisecond)
-			main()
+			// metad can run as a service, and enable the auto restart flag.
+			// see docs/service.md for more information.
+			log.Fatal("Main Recover: %v, try restart.", r)
 		}
 	}()
 
@@ -38,9 +36,7 @@ func main() {
 
 	if pprof {
 		fmt.Printf("Start pprof, 127.0.0.1:6060\n")
-		go func() {
-			log.Fatal("%v", http.ListenAndServe("127.0.0.1:6060", nil))
-		}()
+		go log.Fatal("%v", http.ListenAndServe("127.0.0.1:6060", nil))
 	}
 
 	var config *Config
@@ -54,7 +50,6 @@ func main() {
 	metad, err = New(config)
 	if err != nil {
 		log.Fatal(err.Error())
-		os.Exit(-1)
 	}
 
 	metad.Init()
