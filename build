@@ -11,6 +11,16 @@ gen_version
 
 echo "Building metad ..."
 mkdir -p bin
+
+go mod init
+
+# fix  google.golang.org/grpc/naming: module google.golang.org/grpc@latest found (v1.37.0), but does not contain package google.golang.org/grpc/naming
+# https://github.com/yunify/metad/issues/24
+go mod edit -replace google.golang.org/grpc@v1.37.0=google.golang.org/grpc@v1.3.0
+
+go mod vendor
+go mod tidy
+ 
 go build -o $OUTPUT .
 
 revert_version
